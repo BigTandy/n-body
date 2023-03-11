@@ -2,9 +2,10 @@ from __future__ import annotations
 import arcade
 try:
     from scipy import constants as scicon
-    G = scicon.G
 except ModuleNotFoundError:
     G = 6.6743 * 10 ** -11
+else:
+    G = scicon.G
 
 import math
 import random as rand
