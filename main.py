@@ -21,8 +21,6 @@ import random as rand
 
 
 
-
-
 HEIGHT = 1000
 WIDTH = 1000
 TITLE = "GRAV"
@@ -145,11 +143,8 @@ class Vec2:
 
     def __str__(self):
         return f"""
-Vector M[{self.x}]
-       D[{self.y}]
+Vector <{self.x}, {self.y}>
 """
-
-
 
 
 
@@ -191,10 +186,11 @@ class Phys:
 
 
 
-class Entity(arcade.SpriteCircle):
+class Entity(arcade.Sprite):
 
-    def __init__(self, mass: int, color, x: int, y: int, radius=5):
-        super().__init__(radius, color, False,)
+    def __init__(self, mass: int, x: int, y: int, file: str):
+        
+        super().__init__(filename=file)
 
         self.mass = mass
 
@@ -295,6 +291,7 @@ class Entity(arcade.SpriteCircle):
                 newvels = self.elastic(_)
                 self.vel = newvels[0]
                 _.vel = newvels[1]
+                print(self.closest)
 
                 # self.mass += _.mass
                 # self.width += _.width
@@ -383,12 +380,15 @@ class Sim(arcade.Window):
         themass = 25_000_000_000_000_000
         #print(themass)
         if button == arcade.MOUSE_BUTTON_LEFT:
-            self.objects.append(Entity(themass, (0,0,255), x, y))
+            #self.objects.append(Entity(themass, (0,0,255), x, y, ))
+            self.objects.append(Entity(themass, x, y, "media/earthlike.png"))
             #self.objects[-1].vel = Vec2(150, 0)
         elif button == arcade.MOUSE_BUTTON_RIGHT:
-            self.objects.append(Entity(-themass, (255,0,0), x, y))
+            #self.objects.append(Entity(-themass, (255,0,0), x, y,))
+            self.objects.append(Entity(-themass, x, y, "media/red.png"))
         elif button == arcade.MOUSE_BUTTON_MIDDLE:
-            self.objects.append(Entity(themass * 5, (0,255//2 , 255//2), x, y, radius=25))
+            pass
+            #self.objects.append(Entity(themass * 5, (0,255//2 , 255//2), x, y, radius=25))
 
 
     def on_key_press(self, symbol: int, modifiers: int):
