@@ -29,6 +29,15 @@ TITLE = "GRAV"
 
 
 
+#TODO
+#   Mark Units
+#   Impliment GUI
+#   Look into using GPU for Physical calculations
+#   Option to draw Vectors
+
+
+
+
 class Vec2:
 
     def __init__(self, x: float, y: float):
@@ -75,7 +84,12 @@ class Vec2:
         return Vec2(self.x - other.x, self.y - other.y)
 
 
-    def __mul__(self, other: int | float | Vec2) -> Vec2:
+    def __mul__(self, other: int | float | Vec2 ) -> Vec2:
+        #TODO:
+        #   Complex Multiplication
+        #   https://www.physicsforums.com/threads/multiplying-a-vector-by-a-complex-number.897606/
+        #   https://math.stackexchange.com/questions/4060569/intuition-for-multiplying-vectors-by-complex-scalars
+        #   
         if not isinstance(other, (int, float, Vec2)):
             raise TypeError(f"Unsupported operand type(s) for *: 'Vector' and '{type(other)}'")
 
@@ -149,7 +163,7 @@ class Phys:
 
 
     @staticmethod
-    def law_grav_vec(m1: int, m2: int, pos1: Vec2, pos2: Vec2, soft:float=0) -> Vec2:
+    def law_grav_vec(m1: int, m2: int, pos1: Vec2, pos2: Vec2, soft:int=0) -> Vec2:
         # http://www.scholarpedia.org/article/N-body_simulations_(gravitational)
 
         out = G * (
@@ -161,7 +175,7 @@ class Phys:
 
 
     @staticmethod
-    def law_grav_vec_ent(ent1: Entity | arcade.Sprite, ent2: Entity | arcade.Sprite, soft:float=0):
+    def law_grav_vec_ent(ent1: Entity | arcade.Sprite, ent2: Entity | arcade.Sprite, soft:int=0):
         return Phys.law_grav_vec(ent1.mass, ent2.mass, ent1.pos, ent2.pos, soft)
 
 
@@ -179,7 +193,7 @@ class Phys:
 
 class Entity(arcade.SpriteCircle):
 
-    def __init__(self, mass, color, x: int, y: int, radius=5):
+    def __init__(self, mass: int, color, x: int, y: int, radius=5):
         super().__init__(radius, color, False,)
 
         self.mass = mass
@@ -225,7 +239,7 @@ class Entity(arcade.SpriteCircle):
         )
 
 
-    def getForce(self, soft:float=0) -> Vec2:
+    def getForce(self, soft:int=0) -> Vec2:
         global sim
 
         mainforce: Vec2 = Vec2(0, 0)
@@ -236,21 +250,52 @@ class Entity(arcade.SpriteCircle):
         return mainforce
 
 
+    def elastic(self, ent: Entity) -> tuple[Vec2, Vec2]:
+        """
+        Calculates the elastic collision of two entitys and returns the result in a tuple; First value is self's new velocity, second is the affected ent
+        """
+        # https://en.wikipedia.org/wiki/Elastic_collision#One-dimensional_Newtonian
+
+        #TODO: Probably should be using this:
+        # https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional
+
+        #FIXME:
+        #   When an anti-mass object collides with a mass object, it causes a division by zero and crashes
+        #   Lmao
+        #   *Only when the abs of the masses are equivelent
+
+        #combined mass, because it shows up alot
+
+        smass = abs(self.mass)
+        emass = abs(ent.mass)
 
 
+        cm = smass + emass
+
+        v1 = \
+        (((smass - emass) / cm) * self.vel) + (((2 * emass) / cm) * ent.vel)
+        
+        v2 = \
+        ((2 * smass) / cm * self.vel) + (((emass - smass) / cm) * ent.vel)
+
+        return (v1, v2)
+    
 
     def on_update(self, delta_time: float = 1 / 60):
         global sim
 
         # https://www.cs.princeton.edu/courses/archive/spr01/cs126/assignments/nbody.html
-        # http://www.scholarpedia.org/article/N-body_simulations_(gravitational)
 
 
         collide = self.collides_with_list(sim.objects)
         if len(collide) > 0:
             for _ in collide:
-                self.vel = -self.vel
-                _.vel = -_.vel
+                # self.vel = -self.vel #FIXME? flips each collision, should be one block higher?
+                # _.vel = -_.vel
+                newvels = self.elastic(_)
+                self.vel = newvels[0]
+                _.vel = newvels[1]
+
                 # self.mass += _.mass
                 # self.width += _.width
                 # self.height += _.height
@@ -275,24 +320,27 @@ class Entity(arcade.SpriteCircle):
                     continue
 
 
+        
         #Bounce off edge
-        if (self.center_x > WIDTH) or (self.center_x < 0) or (self.center_y > HEIGHT) or (self.center_y < 0):
+        if (self.center_x > sim.width) or (self.center_x < 0) or (self.center_y > sim.height) or (self.center_y < 0):
             self.vel = -self.vel
 
 
         #Delete ent if too far
         deldist = 10
-        if (self.center_x > WIDTH + deldist) or (self.center_x < 0 - deldist) or (self.center_y > HEIGHT + deldist) or (self.center_y < 0 - deldist):
+        if (self.center_x > sim.width + deldist) or (self.center_x < 0 - deldist) or (self.center_y > sim.height + deldist) or (self.center_y < 0 - deldist):
             #self.kill()
             self.vel = Vec2(0, 0)
-            self.pos = Vec2(WIDTH / 2, HEIGHT / 2)
+            self.pos = Vec2(sim.width / 2, sim.height / 2)
 
 
 
 
 
         # Soft=10 is ok
-        force = self.getForce(20)
+        # Soft=20 is better
+        # Soft=100 is even better?
+        force = self.getForce(100)
 
         self.vel += Phys.law_accl_from_force(self.mass, force) * delta_time
         self.pos += self.vel * delta_time
@@ -306,7 +354,7 @@ class Entity(arcade.SpriteCircle):
 class Sim(arcade.Window):
 
     def __init__(self, width, height, title):
-        super().__init__(width, height, title)
+        super().__init__(width, height, title, resizable=True)
         arcade.set_background_color(arcade.color.BLACK)
 
         self.objects = arcade.SpriteList()
@@ -334,8 +382,13 @@ class Sim(arcade.Window):
         #themass = 25_000_000
         themass = 25_000_000_000_000_000
         #print(themass)
-        self.objects.append(Entity(themass, (0,0,255), x, y))
-        pass
+        if button == arcade.MOUSE_BUTTON_LEFT:
+            self.objects.append(Entity(themass, (0,0,255), x, y))
+            #self.objects[-1].vel = Vec2(150, 0)
+        elif button == arcade.MOUSE_BUTTON_RIGHT:
+            self.objects.append(Entity(-themass, (255,0,0), x, y))
+        elif button == arcade.MOUSE_BUTTON_MIDDLE:
+            self.objects.append(Entity(themass * 5, (0,255//2 , 255//2), x, y, radius=25))
 
 
     def on_key_press(self, symbol: int, modifiers: int):
@@ -348,17 +401,19 @@ class Sim(arcade.Window):
                 self.objects.append(Entity(25_000_000_000_000_000, (0,0,255), rand.randint(0, WIDTH), rand.randint(0, HEIGHT)))
 
         if symbol == arcade.key.L:
-            temp = arcade.SpriteList()
-            offset_x = 50
-            offset_y = 50
-            for x in range(WIDTH):
-                if x % 100 != 0:
-                    continue
-                for y in range(HEIGHT):
-                    if y % 100 != 0:
-                        continue
-                    temp.append(Entity(25_000_000_000, (0,255,0), x + offset_x, y + offset_y, ))
-            self.objects.extend(temp)
+            for _ in self.objects:
+                _.vel = Vec2(0, 0)
+            # temp = arcade.SpriteList()
+            # offset_x = 50
+            # offset_y = 50
+            # for x in range(WIDTH):
+            #     if x % 100 != 0:
+            #         continue
+            #     for y in range(HEIGHT):
+            #         if y % 100 != 0:
+            #             continue
+            #         temp.append(Entity(25_000_000_000, (0,255,0), x + offset_x, y + offset_y, ))
+            # self.objects.extend(temp)
 
 
 
