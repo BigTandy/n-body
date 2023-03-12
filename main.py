@@ -1,5 +1,6 @@
 from __future__ import annotations
 import arcade
+import arcade.gui
 try:
     from scipy import constants as scicon
 except ModuleNotFoundError:
@@ -9,6 +10,8 @@ else:
 
 import math
 import random as rand
+from dataclasses import dataclass
+from typing import Optional #FIXME, is typing still slow?
 
 
 # Copyright (C) 2023 Bud P. L. Patterson
@@ -32,6 +35,9 @@ TITLE = "GRAV"
 #   Impliment GUI
 #   Look into using GPU for Physical calculations
 #   Option to draw Vectors
+#   Inelastic Collisions and Heat lost / Energy; Want to conserve energy in system, Heat or something
+#   Show total energy in system
+#   Ability to show / draw vectors
 
 
 
@@ -184,15 +190,86 @@ class Phys:
         return force / mass
 
 
+    @staticmethod
+    def elastic_collision(m1: int, m2: int, vel1: Vec2, vel2: Vec2) -> tuple[Vec2, Vec2]:
+        """
+        Calculates the elastic collision of two entitys and returns the result in a tuple;
+        First value is self's new velocity, second is the affected ent
+        """
+        # https://en.wikipedia.org/wiki/Elastic_collision#One-dimensional_Newtonian
+
+        #TODO: Probably should be using this:
+        # https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional
+
+        #FIXME:
+        #   When an anti-mass object collides with a mass object, it causes a division by zero and crashes
+        #   Lmao
+        #   *Only when the abs of the masses are equivelent
+
+        #combined mass, because it shows up alot
+
+        smass = abs(m1)
+        emass = abs(m2)
+
+
+        cm = smass + emass
+
+        v1 = \
+        (((smass - emass) / cm) * vel1) + (((2 * emass) / cm) * vel2)
+        
+        v2 = \
+        ((2 * smass) / cm * vel1) + (((emass - smass) / cm) * vel2)
+
+        return (v1, v2)
+
+
+    @staticmethod
+    def inelastic_collision(C: float, m1: int, m2: int, vel1: Vec2, vel2: Vec2) -> tuple[Vec2, Vec2]:
+        """
+        Calculates the inelastic collision of two entitys and returns the result in a tuple;
+        First value is self's new velocity, second is the affected ent
+
+        :param C: This is the Coefficient of Restitution: float 0-1; 1 being completely elastic collision, 0 being completly inelastic collision
+        """
+        # https://en.wikipedia.org/wiki/Inelastic_collision#Formula
+
+
+        m1 = abs(m1)
+        m2 = abs(m2)
+
+        v1 = \
+        (C*m2 * (vel2 - vel1) + (m1*vel1) + (m2*vel2)) / (m1 + m2)
+
+        v2 = \
+        (C*m1 * (vel1 - vel2) + (m1*vel1) + (m2*vel2)) / (m1 + m2)
+
+        return (v1, v2)
+
+
+    @staticmethod
+    def elastic_collision_2d():
+        # TODO
+        """
+        Calculates the elastic collision of two entitys and returns the result in a tuple;
+        First value is self's new velocity, second is the affected ent
+        """
+        # https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional
+
+
+    @staticmethod
+    def calc_needed_orbit_speed(m1: int, m2: int, r: int) -> float:
+        v = math.sqrt(G * (m1 + m2) / r)
+
 
 
 class Entity(arcade.Sprite):
 
-    def __init__(self, mass: int, x: int, y: int, file: str):
+    def __init__(self, mass: int, x: int, y: int, file: str, scale: float=1, *args, **kwargs):
         
-        super().__init__(filename=file)
+        super().__init__(filename=file, scale=scale, *args, **kwargs)
 
         self.mass = mass
+        self.file = file
 
         #self.change_x
         #self.change_y
@@ -246,37 +323,6 @@ class Entity(arcade.Sprite):
         return mainforce
 
 
-    def elastic(self, ent: Entity) -> tuple[Vec2, Vec2]:
-        """
-        Calculates the elastic collision of two entitys and returns the result in a tuple; First value is self's new velocity, second is the affected ent
-        """
-        # https://en.wikipedia.org/wiki/Elastic_collision#One-dimensional_Newtonian
-
-        #TODO: Probably should be using this:
-        # https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional
-
-        #FIXME:
-        #   When an anti-mass object collides with a mass object, it causes a division by zero and crashes
-        #   Lmao
-        #   *Only when the abs of the masses are equivelent
-
-        #combined mass, because it shows up alot
-
-        smass = abs(self.mass)
-        emass = abs(ent.mass)
-
-
-        cm = smass + emass
-
-        v1 = \
-        (((smass - emass) / cm) * self.vel) + (((2 * emass) / cm) * ent.vel)
-        
-        v2 = \
-        ((2 * smass) / cm * self.vel) + (((emass - smass) / cm) * ent.vel)
-
-        return (v1, v2)
-    
-
     def on_update(self, delta_time: float = 1 / 60):
         global sim
 
@@ -288,10 +334,12 @@ class Entity(arcade.Sprite):
             for _ in collide:
                 # self.vel = -self.vel #FIXME? flips each collision, should be one block higher?
                 # _.vel = -_.vel
-                newvels = self.elastic(_)
+                #inelastic collistion, '.8' works well
+                newvels = Phys.elastic_collision(self.mass, _.mass, self.vel, _.vel)
+
                 self.vel = newvels[0]
                 _.vel = newvels[1]
-                print(self.closest)
+                #print(self.closest)
 
                 # self.mass += _.mass
                 # self.width += _.width
@@ -337,7 +385,7 @@ class Entity(arcade.Sprite):
         # Soft=10 is ok
         # Soft=20 is better
         # Soft=100 is even better?
-        force = self.getForce(100)
+        force = self.getForce(-100)
 
         self.vel += Phys.law_accl_from_force(self.mass, force) * delta_time
         self.pos += self.vel * delta_time
@@ -346,6 +394,11 @@ class Entity(arcade.Sprite):
         self.age += delta_time
 
 
+@dataclass
+class Body:
+    mass: int
+    file: str
+    scale: Optional[float] = 1
 
 
 class Sim(arcade.Window):
@@ -355,6 +408,40 @@ class Sim(arcade.Window):
         arcade.set_background_color(arcade.color.BLACK)
 
         self.objects = arcade.SpriteList()
+        self.center_mass = arcade.SpriteCircle(5, (127, 127, 127))
+        
+        self.manager = arcade.gui.UIManager()
+        self.manager.enable()
+
+
+        #Placement state ,,, state
+        self.place_state_text = arcade.Text(
+            "Static", self.width - 5, self.height - 5, arcade.color.WHITE, 12, anchor_x="right", anchor_y="top")
+
+        # Stores how objects should be placed:
+        #   S: Static, impart no momentum apon placement
+        #   O: Orbit, Orbit nearest body
+
+        self.place_states = ["Static", "Orbit"]
+        self.place_state = "Static"
+
+        #Mouse hover shadow
+        self.hover_shadow = Entity(0, 0, 0, "media/earthlike.png", )
+        self.hover_shadow.color = (127, 127, 127)
+
+        self.standard_mass = 25_000_000_000_000_000
+        #TODO, Might want to switch these to Entitys proper and just switch what hover_shadow is pointing to
+        # self.bodys = [
+        #     Body(self.standard_mass, "media/earthlike.png"),
+        #     Body(-self.standard_mass, "media/red.png"),
+        #     Body(self.standard_mass * 5, "media/gas_giant_25.png", .4)
+        #     ]
+        self.bodys = [
+            Entity(self.standard_mass, 0, 0, "media/earthlike.png", ),
+            Entity(-self.standard_mass, 0, 0, "media/red.png", ),
+            Entity(self.standard_mass * 5, 0, 0, "media/gas_giant_25.png", .4)
+        ]
+        self.current_body = 0
 
 
 
@@ -366,29 +453,64 @@ class Sim(arcade.Window):
         self.clear()
 
         self.objects.draw()
+        self.hover_shadow.draw()
+        self.center_mass.draw()
+        
+        self.place_state_text.draw()
 
 
     def on_update(self, delta_time: float):
         self.objects.on_update(delta_time)
 
 
+        # Update place state text
+        self.place_state_text.text = self.place_state
+
+
+        # Find center of mass
+        # https://www.khanacademy.org/science/physics/linear-momentum/center-of-mass/v/center-of-mass-equation
+
+        if len(self.objects) > 0:
+            self.center_mass.visible = True
+        else:
+            self.center_mass.visible = False
+
+        mass_center_vec = Vec2(0, 0)
+        total_mass = 0
+        for obj in self.objects:
+            mass_center_vec += obj.pos * obj.mass
+            total_mass += obj.mass
+
+        if total_mass > 0:
+            mass_center_vec /= total_mass
+            self.center_mass.center_x = mass_center_vec.x
+            self.center_mass.center_y = mass_center_vec.y
+
+
+
+    def body_init(self, b: Body, x, y):
+        self.objects.append(Entity(b.mass, x, y, b.file, b.scale))
+
+
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
-        #TODO make entity on click
-        #50000
-        #themass = rand.randint(25000, 100_000)
-        #themass = 25_000_000
-        themass = 25_000_000_000_000_000
-        #print(themass)
+
+    
         if button == arcade.MOUSE_BUTTON_LEFT:
-            #self.objects.append(Entity(themass, (0,0,255), x, y, ))
-            self.objects.append(Entity(themass, x, y, "media/earthlike.png"))
-            #self.objects[-1].vel = Vec2(150, 0)
-        elif button == arcade.MOUSE_BUTTON_RIGHT:
-            #self.objects.append(Entity(-themass, (255,0,0), x, y,))
-            self.objects.append(Entity(-themass, x, y, "media/red.png"))
-        elif button == arcade.MOUSE_BUTTON_MIDDLE:
-            pass
-            #self.objects.append(Entity(themass * 5, (0,255//2 , 255//2), x, y, radius=25))
+            #self.body_init(self.bodys[self.current_body], x, y)
+            cbody = self.bodys[self.current_body]
+            self.objects.append(Entity(cbody.mass, x, y, cbody.file, cbody.scale))
+
+
+    def on_mouse_enter(self, x: int, y: int):
+        self.hover_shadow.visible = True
+    
+    def on_mouse_leave(self, x: int, y: int):
+        self.hover_shadow.visible = False
+
+    def on_mouse_motion(self, x: int, y: int, dx: int, dy: int):
+        self.hover_shadow.center_x = x
+        self.hover_shadow.center_y = y
+
 
 
     def on_key_press(self, symbol: int, modifiers: int):
@@ -398,23 +520,30 @@ class Sim(arcade.Window):
 
         if symbol == arcade.key.D:
             for _ in range(5):
-                self.objects.append(Entity(25_000_000_000_000_000, (0,0,255), rand.randint(0, WIDTH), rand.randint(0, HEIGHT)))
+                self.objects.append(Entity(25_000_000_000_000_000, rand.randint(0, WIDTH), rand.randint(0, HEIGHT)))
 
+        #Stop all objects
         if symbol == arcade.key.L:
             for _ in self.objects:
                 _.vel = Vec2(0, 0)
-            # temp = arcade.SpriteList()
-            # offset_x = 50
-            # offset_y = 50
-            # for x in range(WIDTH):
-            #     if x % 100 != 0:
-            #         continue
-            #     for y in range(HEIGHT):
-            #         if y % 100 != 0:
-            #             continue
-            #         temp.append(Entity(25_000_000_000, (0,255,0), x + offset_x, y + offset_y, ))
-            # self.objects.extend(temp)
+        
 
+        #Change placement state
+        if symbol == arcade.key.TAB:
+            self.place_state = self.place_states[(self.place_states.index(self.place_state) + 1) % len(self.place_states)]
+
+
+        if symbol == arcade.key.BRACKETRIGHT:
+            pos = self.bodys[self.current_body].pos
+            self.current_body = (self.current_body + 1) % len(self.bodys)
+            self.hover_shadow = self.bodys[self.current_body]
+            self.hover_shadow.pos = pos
+
+        if symbol == arcade.key.BRACKETLEFT:
+            pos = self.bodys[self.current_body].pos
+            self.current_body = (self.current_body - 1) % len(self.bodys)
+            self.hover_shadow = self.bodys[self.current_body]
+            self.hover_shadow.pos = pos
 
 
 sim = Sim(WIDTH, HEIGHT, TITLE)
