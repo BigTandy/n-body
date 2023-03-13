@@ -119,6 +119,10 @@ class Vec2:
         return out
 
 
+    def mag(self) -> float | int:
+        return math.sqrt(self.x**2 + self.y**2)
+
+
     def __neg__(self) -> Vec2:
         return Vec2(-self.x, -self.y)
 
@@ -259,28 +263,11 @@ class Phys:
 
 
     @staticmethod
-    def calc_needed_orbit_speed(m1: int, m2: int, r: int) -> float:
-        return math.sqrt(G * (m1 + m2) / r)
+    def calc_needed_orbit_speed(m1: int, m2: int, r: float) -> float:
+        return math.sqrt(
+            (G * (m1 + m2)) / r
+        )
 
-
-
-# class Vec_draw:
-#     def __init__(self, ent:Entity, vec: Vec2, width:float=5, color=arcade.color.BUD_GREEN):
-#         self.parent = ent
-#         self.vec = vec
-#         self.color = color
-#         self.width = width
-    
-
-#     def draw(self):
-#         arcade.draw_line(
-#             self.parent.center_x, self.parent.center_y,
-#             self.parent.center_x + self.vec.x, self.parent.center_y + self.vec.y,
-#             self.color, self.width
-#         )
-    
-#     def update(self, vec: Vec2):
-#         self.vec = vec
 
 
 
@@ -293,10 +280,6 @@ class Entity(arcade.Sprite):
         self.mass = mass
         self.file = file
 
-        #self.change_x
-        #self.change_y
-        #self.change_angle
-
         self.center_x = x
         self.center_y = y
 
@@ -307,10 +290,10 @@ class Entity(arcade.Sprite):
         self.draw_hit_box((0, 255, 0), 1)
 
         #Have extra properties
-        #self.closest =
+
         self.closest = [None, None]
 
-        self.drawn_vec:Vec_draw | None = None
+
 
 
     @property
@@ -335,12 +318,13 @@ class Entity(arcade.Sprite):
         )
 
 
-    def getForce(self, soft:int=0) -> Vec2:
+    def getForce(self, soft: int = 0) -> Vec2:
         global sim
 
         mainforce: Vec2 = Vec2(0, 0)
         for ent in sim.objects:
-            if ent == self: continue
+            if ent == self:
+                continue
             mainforce += Phys.law_grav_vec_ent(self, ent, soft)
 
         return mainforce
@@ -409,7 +393,7 @@ class Entity(arcade.Sprite):
         # Soft=10 is ok
         # Soft=20 is better
         # Soft=100 is even better?
-        force = self.getForce(100)
+        force = self.getForce(50)
 
         self.vel += Phys.law_accl_from_force(self.mass, force) * delta_time
         self.pos += self.vel * delta_time
@@ -453,9 +437,10 @@ class Sim(arcade.Window):
         self.standard_mass = 25_000_000_000_000_000
 
         self.bodys = [
-            Entity(self.standard_mass, 0, 0, "media/earthlike.png", ),
+            Entity(self.standard_mass // 2, 0, 0, "media/earthlike.png", ),
             Entity(-self.standard_mass, 0, 0, "media/red.png", ),
-            Entity(self.standard_mass * 5, 0, 0, "media/gas_giant_25.png", .4)
+            #Entity(self.standard_mass * 5, 0, 0, "media/gas_giant_25.png", .4)
+            Entity(self.standard_mass * 500, 0, 0, "media/gas_giant_25.png", .4)
         ]
 
         for _ in self.bodys:
@@ -572,18 +557,39 @@ class Sim(arcade.Window):
             
             #If we are set to make this body orbit another, find angle and velocity needed to make that happen
             if (self.place_state == "Orbit") and (self.selected_object is not None):
-                #BUG
-                #FIXME
-                selObj = self.selected_object
+
+                selObj: Entity = self.selected_object
                 curObj = self.objects[-1]
+                dist = math.sqrt( ((selObj.center_x - curObj.center_x)**2) + ((selObj.center_y - curObj.center_y)**2))
+
                 speed_needed = Phys.calc_needed_orbit_speed(
                     selObj.mass, curObj.mass,
-                    math.sqrt((curObj.center_x - selObj.center_x)**2 + (curObj.center_y - selObj.center_y)**2)
+                    dist
                 )
-                angle = math.atan2(selObj.pos.y, selObj.pos.x) - math.atan2(curObj.pos.y, curObj.pos.x)
-                print("ANGLE", angle, "SPEED", speed_needed)
 
-                curObj.vel = Vec2(speed_needed, angle)
+                angle = math.atan2(selObj.pos.y - curObj.pos.y, selObj.pos.x - curObj.pos.x)
+
+                #speed_needed /= 100
+
+                #print("ANGLE", angle, "SPEED", speed_needed)
+
+                # θ = Theta
+                # Y = SIN θ
+                # X = COS θ
+
+                # Turn angle into actual vector
+                y_comp = (dist * math.sin(angle))
+                x_comp = (dist * math.cos(angle))
+
+                #print("x", x_comp, "y", y_comp)
+
+                new_vel = Vec2(x_comp, y_comp)
+                new_vel = Vec2(new_vel.y * -1, new_vel.x)  # Rotate vector by -90 Degrees
+                new_vel = new_vel / new_vel.mag()  # Need to make it into a unit vector before applying speed
+                new_vel *= speed_needed
+
+                curObj.vel = new_vel
+
                 
 
 
@@ -619,20 +625,26 @@ class Sim(arcade.Window):
 
     def on_key_press(self, symbol: int, modifiers: int):
 
+        #Pause
         if symbol == arcade.key.SPACE:
             self.paused = not self.paused
 
+
+        #Clear all objects
         if symbol == arcade.key.R:
             self.objects.clear()
 
-        
+
+        #Show Vectors
         if symbol == arcade.key.D:
             self.draw_vecs = not self.draw_vecs
 
 
+        #Spawn random earthlikes
         if symbol == arcade.key.M:
             for _ in range(5):
                 self.objects.append(Entity(25_000_000_000_000_000, rand.randint(0, self.width), rand.randint(0, self.height), "media/earthlike.png"))
+
 
         #Stop all objects
         if symbol == arcade.key.L:
@@ -644,6 +656,16 @@ class Sim(arcade.Window):
         #Change placement state
         if symbol == arcade.key.TAB:
             self.place_state = self.place_states[(self.place_states.index(self.place_state) + 1) % len(self.place_states)]
+
+
+        if symbol == arcade.key.UP:
+            for _ in self.objects:
+                _.scale += .1
+
+
+        if symbol == arcade.key.DOWN:
+            for _ in self.objects:
+                _.scale -= .1
 
 
 
