@@ -262,10 +262,30 @@ class Phys:
 
 
 
+# class Vec_draw:
+#     def __init__(self, ent:Entity, vec: Vec2, width:float=5, color=arcade.color.BUD_GREEN):
+#         self.parent = ent
+#         self.vec = vec
+#         self.color = color
+#         self.width = width
+    
+
+#     def draw(self):
+#         arcade.draw_line(
+#             self.parent.center_x, self.parent.center_y,
+#             self.parent.center_x + self.vec.x, self.parent.center_y + self.vec.y,
+#             self.color, self.width
+#         )
+    
+#     def update(self, vec: Vec2):
+#         self.vec = vec
+
+
+
 class Entity(arcade.Sprite):
 
     def __init__(self, mass: int, x: int, y: int, file: str, scale: float=1, *args, **kwargs):
-        
+
         super().__init__(filename=file, scale=scale, *args, **kwargs)
 
         self.mass = mass
@@ -288,6 +308,7 @@ class Entity(arcade.Sprite):
         #self.closest =
         self.closest = [None, None]
 
+        self.drawn_vec:Vec_draw | None = None
 
 
     @property
@@ -321,6 +342,8 @@ class Entity(arcade.Sprite):
             mainforce += Phys.law_grav_vec_ent(self, ent, soft)
 
         return mainforce
+    
+
 
 
     def on_update(self, delta_time: float = 1 / 60):
@@ -381,24 +404,19 @@ class Entity(arcade.Sprite):
 
 
 
-
         # Soft=10 is ok
         # Soft=20 is better
         # Soft=100 is even better?
-        force = self.getForce(-100)
+        force = self.getForce(100)
 
         self.vel += Phys.law_accl_from_force(self.mass, force) * delta_time
         self.pos += self.vel * delta_time
 
-
         self.age += delta_time
 
 
-@dataclass
-class Body:
-    mass: int
-    file: str
-    scale: Optional[float] = 1
+
+
 
 
 class Sim(arcade.Window):
@@ -428,25 +446,35 @@ class Sim(arcade.Window):
         #Mouse hover shadow
         self.hover_shadow = Entity(0, 0, 0, "media/earthlike.png", )
         self.hover_shadow.color = (127, 127, 127)
+        self.place = True
 
         self.standard_mass = 25_000_000_000_000_000
-        #TODO, Might want to switch these to Entitys proper and just switch what hover_shadow is pointing to
-        # self.bodys = [
-        #     Body(self.standard_mass, "media/earthlike.png"),
-        #     Body(-self.standard_mass, "media/red.png"),
-        #     Body(self.standard_mass * 5, "media/gas_giant_25.png", .4)
-        #     ]
+
         self.bodys = [
             Entity(self.standard_mass, 0, 0, "media/earthlike.png", ),
             Entity(-self.standard_mass, 0, 0, "media/red.png", ),
             Entity(self.standard_mass * 5, 0, 0, "media/gas_giant_25.png", .4)
         ]
+
+        for _ in self.bodys:
+            _.color = (170, 170, 170)
+
         self.current_body = 0
+
+
+        self.draw_vecs = False
+
+
+        self.selected_object: Entity | None = None
+
+
+
 
 
 
     def setup(self):
         pass
+
 
 
     def on_draw(self):
@@ -457,6 +485,25 @@ class Sim(arcade.Window):
         self.center_mass.draw()
         
         self.place_state_text.draw()
+
+        if self.draw_vecs:
+            for _ in self.objects:
+                arcade.draw_line(
+                    _.center_x, _.center_y,
+                    _.center_x + _.vel.x, _.center_y + _.vel.y,
+                    arcade.color.WHITE, 2
+                )
+        
+        if self.selected_object:
+            arcade.draw_circle_outline(
+                self.selected_object.center_x, self.selected_object.center_y,
+                (max(self.selected_object.width, self.selected_object.height) // 2),
+                arcade.color.GREEN
+            )
+
+
+
+
 
 
     def on_update(self, delta_time: float):
@@ -488,21 +535,39 @@ class Sim(arcade.Window):
 
 
 
-    def body_init(self, b: Body, x, y):
-        self.objects.append(Entity(b.mass, x, y, b.file, b.scale))
+    def on_resize(self, width: float, height: float):
+        self.place_state_text.x, self.place_state_text.y = self.width - 5, self.height - 5
+        super().on_resize(width, height)
+
 
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
 
-    
-        if button == arcade.MOUSE_BUTTON_LEFT:
+
+        if (button == arcade.MOUSE_BUTTON_LEFT) and (self.place):
             #self.body_init(self.bodys[self.current_body], x, y)
             cbody = self.bodys[self.current_body]
             self.objects.append(Entity(cbody.mass, x, y, cbody.file, cbody.scale))
 
+        elif (button == arcade.MOUSE_BUTTON_LEFT) and not (self.place):
+            #Run selecting object code here
+            self.selected_object = arcade.get_sprites_at_point((x, y), self.objects)
+
+            # Check to see if we actually clicked on an object: If yes make that the current object, if not, make None
+            if self.selected_object:
+                self.selected_object = self.selected_object[-1] #-1 to grab the top-most object
+            else:
+                self.selected_object = None
+            print(self.selected_object)
+
+        elif button == arcade.MOUSE_BUTTON_RIGHT:
+            self.place = not self.hover_shadow.visible
+            self.on_mouse_enter(0, 0)
+
+
 
     def on_mouse_enter(self, x: int, y: int):
-        self.hover_shadow.visible = True
+            self.hover_shadow.visible = self.place
     
     def on_mouse_leave(self, x: int, y: int):
         self.hover_shadow.visible = False
@@ -512,15 +577,19 @@ class Sim(arcade.Window):
         self.hover_shadow.center_y = y
 
 
-
     def on_key_press(self, symbol: int, modifiers: int):
 
         if symbol == arcade.key.R:
             self.objects.clear()
 
+        
         if symbol == arcade.key.D:
+            self.draw_vecs = not self.draw_vecs
+
+
+        if symbol == arcade.key.M:
             for _ in range(5):
-                self.objects.append(Entity(25_000_000_000_000_000, rand.randint(0, WIDTH), rand.randint(0, HEIGHT)))
+                self.objects.append(Entity(25_000_000_000_000_000, rand.randint(0, self.width), rand.randint(0, self.height), "media/earthlike.png"))
 
         #Stop all objects
         if symbol == arcade.key.L:
@@ -528,21 +597,32 @@ class Sim(arcade.Window):
                 _.vel = Vec2(0, 0)
         
 
+
         #Change placement state
         if symbol == arcade.key.TAB:
             self.place_state = self.place_states[(self.place_states.index(self.place_state) + 1) % len(self.place_states)]
 
 
+
+        #Change current object
         if symbol == arcade.key.BRACKETRIGHT:
             pos = self.bodys[self.current_body].pos
+            vis = self.bodys[self.current_body].visible
+
             self.current_body = (self.current_body + 1) % len(self.bodys)
             self.hover_shadow = self.bodys[self.current_body]
+
+            self.hover_shadow.visible = vis
             self.hover_shadow.pos = pos
 
         if symbol == arcade.key.BRACKETLEFT:
             pos = self.bodys[self.current_body].pos
+            vis = self.bodys[self.current_body].visible
+
             self.current_body = (self.current_body - 1) % len(self.bodys)
             self.hover_shadow = self.bodys[self.current_body]
+
+            self.hover_shadow.visible = vis
             self.hover_shadow.pos = pos
 
 
