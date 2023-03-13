@@ -51,6 +51,8 @@ class Vec2:
         :param x:
         :param y:
         """
+        assert x is not None, ValueError(f"Vector 'x' cannot be None")
+        assert y is not None, ValueError(f"Vector 'y' cannot be None")
         self._x = x
         self._y = y
         #print(self)
@@ -258,7 +260,7 @@ class Phys:
 
     @staticmethod
     def calc_needed_orbit_speed(m1: int, m2: int, r: int) -> float:
-        v = math.sqrt(G * (m1 + m2) / r)
+        return math.sqrt(G * (m1 + m2) / r)
 
 
 
@@ -467,6 +469,11 @@ class Sim(arcade.Window):
 
         self.selected_object: Entity | None = None
 
+        self.paused = False
+        self.paused_text = arcade.Text(
+            "PAUSED", self.width // 2, 2, arcade.color.DARK_PASTEL_RED, 14, anchor_x="center"
+        )
+
 
 
 
@@ -500,14 +507,28 @@ class Sim(arcade.Window):
                 (max(self.selected_object.width, self.selected_object.height) // 2),
                 arcade.color.GREEN
             )
+        
+        if self.paused:
+            self.paused_text.draw()
 
+        
+        if (self.place_state == "Orbit") and (self.selected_object is not None) and (self.place):
+            curBody = self.hover_shadow
+
+            arcade.draw_circle_outline(
+                self.selected_object.center_x, self.selected_object.center_y,
+                math.sqrt((curBody.center_x - self.selected_object.center_x)**2 + (curBody.center_y - self.selected_object.center_y)**2),
+                arcade.color.GRAY_BLUE
+            )
 
 
 
 
 
     def on_update(self, delta_time: float):
-        self.objects.on_update(delta_time)
+
+        if not self.paused:
+            self.objects.on_update(delta_time)
 
 
         # Update place state text
@@ -537,6 +558,7 @@ class Sim(arcade.Window):
 
     def on_resize(self, width: float, height: float):
         self.place_state_text.x, self.place_state_text.y = self.width - 5, self.height - 5
+        self.paused_text.x = self.width // 2
         super().on_resize(width, height)
 
 
@@ -545,9 +567,25 @@ class Sim(arcade.Window):
 
 
         if (button == arcade.MOUSE_BUTTON_LEFT) and (self.place):
-            #self.body_init(self.bodys[self.current_body], x, y)
             cbody = self.bodys[self.current_body]
             self.objects.append(Entity(cbody.mass, x, y, cbody.file, cbody.scale))
+            
+            #If we are set to make this body orbit another, find angle and velocity needed to make that happen
+            if (self.place_state == "Orbit") and (self.selected_object is not None):
+                #BUG
+                #FIXME
+                selObj = self.selected_object
+                curObj = self.objects[-1]
+                speed_needed = Phys.calc_needed_orbit_speed(
+                    selObj.mass, curObj.mass,
+                    math.sqrt((curObj.center_x - selObj.center_x)**2 + (curObj.center_y - selObj.center_y)**2)
+                )
+                angle = math.atan2(selObj.pos.y, selObj.pos.x) - math.atan2(curObj.pos.y, curObj.pos.x)
+                print("ANGLE", angle, "SPEED", speed_needed)
+
+                curObj.vel = Vec2(speed_needed, angle)
+                
+
 
         elif (button == arcade.MOUSE_BUTTON_LEFT) and not (self.place):
             #Run selecting object code here
@@ -559,6 +597,8 @@ class Sim(arcade.Window):
             else:
                 self.selected_object = None
             print(self.selected_object)
+
+
 
         elif button == arcade.MOUSE_BUTTON_RIGHT:
             self.place = not self.hover_shadow.visible
@@ -578,6 +618,9 @@ class Sim(arcade.Window):
 
 
     def on_key_press(self, symbol: int, modifiers: int):
+
+        if symbol == arcade.key.SPACE:
+            self.paused = not self.paused
 
         if symbol == arcade.key.R:
             self.objects.clear()
