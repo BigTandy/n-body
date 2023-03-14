@@ -31,13 +31,16 @@ TITLE = "GRAV"
 
 
 #TODO
+#   Collision !!
+#   CLEAN UP CODE, COMMENT, DE-SPEGETIFY
+#   ~~Camera, Zoom, and Scrolling
+#   ~~Have Camera follow selected object
+#   Controllable Entity
 #   Mark Units
 #   Impliment GUI
 #   Look into using GPU for Physical calculations
-#   Option to draw Vectors
 #   Inelastic Collisions and Heat lost / Energy; Want to conserve energy in system, Heat or something
 #   Show total energy in system
-#   Ability to show / draw vectors
 
 
 
@@ -123,6 +126,10 @@ class Vec2:
         return math.sqrt(self.x**2 + self.y**2)
 
 
+    def heading(self) -> float | int:
+        return math.atan2(self.y, self.x)
+
+
     def __neg__(self) -> Vec2:
         return Vec2(-self.x, -self.y)
 
@@ -151,7 +158,6 @@ class Vec2:
 
     def __len__(self):
         return 2
-
 
     def __str__(self):
         return f"""
@@ -207,10 +213,7 @@ class Phys:
         #TODO: Probably should be using this:
         # https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional
 
-        #FIXME:
-        #   When an anti-mass object collides with a mass object, it causes a division by zero and crashes
-        #   Lmao
-        #   *Only when the abs of the masses are equivelent
+
 
         #combined mass, because it shows up alot
 
@@ -341,8 +344,6 @@ class Entity(arcade.Sprite):
         collide = self.collides_with_list(sim.objects)
         if len(collide) > 0:
             for _ in collide:
-                # self.vel = -self.vel #FIXME? flips each collision, should be one block higher?
-                # _.vel = -_.vel
                 #inelastic collistion, '.8' works well
                 newvels = Phys.elastic_collision(self.mass, _.mass, self.vel, _.vel)
 
@@ -375,17 +376,17 @@ class Entity(arcade.Sprite):
 
 
         
-        #Bounce off edge
-        if (self.center_x > sim.width) or (self.center_x < 0) or (self.center_y > sim.height) or (self.center_y < 0):
-            self.vel = -self.vel
+        # #Bounce off edge
+        # if (self.center_x > sim.width) or (self.center_x < 0) or (self.center_y > sim.height) or (self.center_y < 0):
+        #     self.vel = -self.vel
 
 
-        #Delete ent if too far
-        deldist = 10
-        if (self.center_x > sim.width + deldist) or (self.center_x < 0 - deldist) or (self.center_y > sim.height + deldist) or (self.center_y < 0 - deldist):
-            #self.kill()
-            self.vel = Vec2(0, 0)
-            self.pos = Vec2(sim.width / 2, sim.height / 2)
+        # #Delete ent if too far
+        # deldist = 10
+        # if (self.center_x > sim.width + deldist) or (self.center_x < 0 - deldist) or (self.center_y > sim.height + deldist) or (self.center_y < 0 - deldist):
+        #     #self.kill()
+        #     self.vel = Vec2(0, 0)
+        #     self.pos = Vec2(sim.width / 2, sim.height / 2)
 
 
 
@@ -403,6 +404,7 @@ class Entity(arcade.Sprite):
 
 
 
+from pyglet.math import Vec2 as PVec2
 
 
 class Sim(arcade.Window):
@@ -410,6 +412,16 @@ class Sim(arcade.Window):
     def __init__(self, width, height, title):
         super().__init__(width, height, title, resizable=True)
         arcade.set_background_color(arcade.color.BLACK)
+
+
+        # WIDTH // 2, HEIGHT // 2
+        self.view_pos = Vec2(0, 0)
+        self.view_speed = .4
+
+
+        self.cam_ui = arcade.Camera(WIDTH, HEIGHT)
+        self.cam_sprites = arcade.Camera(WIDTH, HEIGHT)
+
 
         self.objects = arcade.SpriteList()
         self.center_mass = arcade.SpriteCircle(5, (127, 127, 127))
@@ -419,7 +431,7 @@ class Sim(arcade.Window):
 
 
         #Placement state ,,, state
-        self.place_state_text = arcade.Text(
+        self.   place_state_text = arcade.Text(
             "Static", self.width - 5, self.height - 5, arcade.color.WHITE, 12, anchor_x="right", anchor_y="top")
 
         # Stores how objects should be placed:
@@ -460,6 +472,7 @@ class Sim(arcade.Window):
         )
 
 
+        self.m_text = arcade.Text("", 0, 0, font_size=8)
 
 
 
@@ -470,14 +483,15 @@ class Sim(arcade.Window):
 
 
     def on_draw(self):
+        # TODO COMMENT THIS MESS
         self.clear()
 
+        self.cam_sprites.use()
+
         self.objects.draw()
-        self.hover_shadow.draw()
+
         self.center_mass.draw()
         
-        self.place_state_text.draw()
-
         if self.draw_vecs:
             for _ in self.objects:
                 arcade.draw_line(
@@ -485,6 +499,7 @@ class Sim(arcade.Window):
                     _.center_x + _.vel.x, _.center_y + _.vel.y,
                     arcade.color.WHITE, 2
                 )
+
         
         if self.selected_object:
             arcade.draw_circle_outline(
@@ -493,18 +508,28 @@ class Sim(arcade.Window):
                 arcade.color.GREEN
             )
         
-        if self.paused:
-            self.paused_text.draw()
 
-        
         if (self.place_state == "Orbit") and (self.selected_object is not None) and (self.place):
             curBody = self.hover_shadow
 
             arcade.draw_circle_outline(
                 self.selected_object.center_x, self.selected_object.center_y,
-                math.sqrt((curBody.center_x - self.selected_object.center_x)**2 + (curBody.center_y - self.selected_object.center_y)**2),
+                math.sqrt(((curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x)**2 
+                          + ((curBody.center_y + self.cam_sprites.position.y) - self.selected_object.center_y)**2),
                 arcade.color.GRAY_BLUE
             )
+
+        self.cam_ui.use()
+
+        self.hover_shadow.draw()
+
+
+        #self.m_text.draw()
+
+        self.place_state_text.draw()
+        
+        if self.paused:
+            self.paused_text.draw()
 
 
 
@@ -538,24 +563,55 @@ class Sim(arcade.Window):
             mass_center_vec /= total_mass
             self.center_mass.center_x = mass_center_vec.x
             self.center_mass.center_y = mass_center_vec.y
+        
+
+        if self.selected_object is not None:
+            self.view_pos = self.selected_object.pos
+        
+        self.scroll()
+    
+
+    def scroll(self):
+        pos = PVec2(
+            self.view_pos.x - self.width / 2,
+            self.view_pos.y - self.height / 2
+        )
+        self.cam_sprites.move_to(pos, self.view_speed)
+        
 
 
 
     def on_resize(self, width: float, height: float):
         self.place_state_text.x, self.place_state_text.y = self.width - 5, self.height - 5
         self.paused_text.x = self.width // 2
+
+        self.cam_sprites.resize(int(width), int(height))
+        self.cam_ui.resize(int(width), int(height))
+
+        self.view_pos = Vec2(0, 0)
+
         super().on_resize(width, height)
 
 
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
+        
+        #print("MOUSE", x, y, "VIEW_POS", self.view_pos, "DMOUSE", self.view_pos.x - x, self.view_pos.y - y)
+       
+        #print(self.cam_sprites.position)
+        x, y = self.cam_sprites.position.x + x, self.cam_sprites.position.y + y
 
+        #print("XY", x, y)
+
+        #self.camera_sprites.use()
+        
 
         if (button == arcade.MOUSE_BUTTON_LEFT) and (self.place):
             cbody = self.bodys[self.current_body]
             self.objects.append(Entity(cbody.mass, x, y, cbody.file, cbody.scale))
             
             #If we are set to make this body orbit another, find angle and velocity needed to make that happen
+            # TODO, make it orbit nearest body if not selected?
             if (self.place_state == "Orbit") and (self.selected_object is not None):
 
                 selObj: Entity = self.selected_object
@@ -622,6 +678,11 @@ class Sim(arcade.Window):
         self.hover_shadow.center_x = x
         self.hover_shadow.center_y = y
 
+        self.m_text.x = x
+        self.m_text.y = y
+        self.m_text.text = f"({x}, {y})"
+
+
 
     def on_key_press(self, symbol: int, modifiers: int):
 
@@ -634,9 +695,15 @@ class Sim(arcade.Window):
         if symbol == arcade.key.R:
             self.objects.clear()
 
+        
+        # Deletes selected object
+        if (symbol == arcade.key.DELETE) and (self.selected_object is not None):
+            self.selected_object.kill()
+            self.selected_object = None
+
 
         #Show Vectors
-        if symbol == arcade.key.D:
+        if symbol == arcade.key.V:
             self.draw_vecs = not self.draw_vecs
 
 
@@ -659,13 +726,11 @@ class Sim(arcade.Window):
 
 
         if symbol == arcade.key.UP:
-            for _ in self.objects:
-                _.scale += .1
+            self.objects.rescale(1)
 
 
         if symbol == arcade.key.DOWN:
-            for _ in self.objects:
-                _.scale -= .1
+            self.objects.rescale(-1)
 
 
 
