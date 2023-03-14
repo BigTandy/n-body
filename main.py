@@ -514,8 +514,10 @@ class Sim(arcade.Window):
 
             arcade.draw_circle_outline(
                 self.selected_object.center_x, self.selected_object.center_y,
-                math.sqrt(((curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x)**2 
+                math.sqrt(
+                            ((curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x)**2 
                           + ((curBody.center_y + self.cam_sprites.position.y) - self.selected_object.center_y)**2),
+                          
                 arcade.color.GRAY_BLUE
             )
 
