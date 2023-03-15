@@ -431,7 +431,7 @@ class Sim(arcade.Window):
 
 
         #Placement state ,,, state
-        self.   place_state_text = arcade.Text(
+        self.place_state_text = arcade.Text(
             "Static", self.width - 5, self.height - 5, arcade.color.WHITE, 12, anchor_x="right", anchor_y="top")
 
         # Stores how objects should be placed:
@@ -475,6 +475,13 @@ class Sim(arcade.Window):
         self.m_text = arcade.Text("", 0, 0, font_size=8)
 
 
+        self.w_pressed = False
+        self.s_pressed = False
+        self.a_pressed = False
+        self.d_pressed = False
+        self.cam_speed = 2
+
+
 
 
     def setup(self):
@@ -509,24 +516,27 @@ class Sim(arcade.Window):
             )
         
 
+
         if (self.place_state == "Orbit") and (self.selected_object is not None) and (self.place):
             curBody = self.hover_shadow
 
             arcade.draw_circle_outline(
                 self.selected_object.center_x, self.selected_object.center_y,
                 math.sqrt(
-                            ((curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x)**2 
-                          + ((curBody.center_y + self.cam_sprites.position.y) - self.selected_object.center_y)**2),
-                          
+                            ( (( curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x)) **2
+                          + ( (( curBody.center_y + self.cam_sprites.position.y) - self.selected_object.center_y)) **2),
+
                 arcade.color.GRAY_BLUE
             )
+
+
 
         self.cam_ui.use()
 
         self.hover_shadow.draw()
 
 
-        #self.m_text.draw()
+        self.m_text.draw()
 
         self.place_state_text.draw()
         
@@ -567,16 +577,34 @@ class Sim(arcade.Window):
             self.center_mass.center_y = mass_center_vec.y
         
 
+
+
+
         if self.selected_object is not None:
             self.view_pos = self.selected_object.pos
+        else:
+            if self.w_pressed:
+                self.view_pos = Vec2(self.view_pos.x, self.view_pos.y + self.cam_speed)
+            if self.s_pressed:
+                self.view_pos = Vec2(self.view_pos.x, self.view_pos.y - self.cam_speed)
+            if self.a_pressed:
+                self.view_pos = Vec2(self.view_pos.x - self.cam_speed, self.view_pos.y)
+            if self.d_pressed:
+                self.view_pos = Vec2(self.view_pos.x + self.cam_speed, self.view_pos.y)
+
+
+        #FIXME, Scale the shadow in relation to the sprites cam, might just have to make another cam for it
+        #self.hover_shadow.scale = 1 / self.cam_sprites.scale
+
+
         
         self.scroll()
     
 
     def scroll(self):
         pos = PVec2(
-            self.view_pos.x - self.width / 2,
-            self.view_pos.y - self.height / 2
+            (self.view_pos.x * 1 / self.cam_sprites.scale) - self.width / 2,
+            (self.view_pos.y * 1 / self.cam_sprites.scale) - self.height / 2
         )
         self.cam_sprites.move_to(pos, self.view_speed)
         
@@ -601,7 +629,11 @@ class Sim(arcade.Window):
         #print("MOUSE", x, y, "VIEW_POS", self.view_pos, "DMOUSE", self.view_pos.x - x, self.view_pos.y - y)
        
         #print(self.cam_sprites.position)
-        x, y = self.cam_sprites.position.x + x, self.cam_sprites.position.y + y
+        x, y = \
+        (self.cam_sprites.position.x * 1 / self.cam_sprites.scale) + x, \
+        (self.cam_sprites.position.y * 1 / self.cam_sprites.scale) + y
+
+
 
         #print("XY", x, y)
 
@@ -682,11 +714,24 @@ class Sim(arcade.Window):
 
         self.m_text.x = x
         self.m_text.y = y
-        self.m_text.text = f"({x}, {y})"
+        self.m_text.text = f"({x}, {y}) | ({x * self.cam_sprites.scale}, {y * self.cam_sprites.scale})"
 
 
 
     def on_key_press(self, symbol: int, modifiers: int):
+
+
+        #Move Cam
+        if symbol == arcade.key.W:
+            self.w_pressed = True
+        if symbol == arcade.key.S:
+            self.s_pressed = True
+        if symbol == arcade.key.A:
+            self.a_pressed = True
+        if symbol == arcade.key.D:
+            self.d_pressed = True
+
+
 
         #Pause
         if symbol == arcade.key.SPACE:
@@ -728,11 +773,26 @@ class Sim(arcade.Window):
 
 
         if symbol == arcade.key.UP:
-            self.objects.rescale(1)
+            
+            print(self.cam_sprites.scale)
+
+            self.cam_sprites.scale = round(self.cam_sprites.scale + .1, 1)
+            self.cam_sprites.set_projection()
 
 
         if symbol == arcade.key.DOWN:
-            self.objects.rescale(-1)
+            
+            print(self.cam_sprites.scale)
+
+            if self.cam_sprites.scale > .1:
+                self.cam_sprites.scale = round(self.cam_sprites.scale - .1, 1)
+                self.cam_sprites.set_projection()
+        
+
+        if symbol == arcade.key.P:
+            self.cam_sprites.scale = 1.0
+            self.cam_sprites.set_projection()
+
 
 
 
@@ -756,6 +816,20 @@ class Sim(arcade.Window):
 
             self.hover_shadow.visible = vis
             self.hover_shadow.pos = pos
+
+
+    def on_key_release(self, symbol: int, modifiers: int):
+        
+        #Move Cam
+        if symbol == arcade.key.W:
+            self.w_pressed = False
+        if symbol == arcade.key.S:
+            self.s_pressed = False
+        if symbol == arcade.key.A:
+            self.a_pressed = False
+        if symbol == arcade.key.D:
+            self.d_pressed = False
+
 
 
 sim = Sim(WIDTH, HEIGHT, TITLE)
