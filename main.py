@@ -10,8 +10,7 @@ else:
 
 import math
 import random as rand
-from dataclasses import dataclass
-from typing import Optional #FIXME, is typing still slow?
+
 
 
 # Copyright (C) 2023 Bud P. L. Patterson
@@ -20,7 +19,7 @@ from typing import Optional #FIXME, is typing still slow?
 #This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 #This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-#You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>. 
+#You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 
 
@@ -81,14 +80,14 @@ class Vec2:
 
     def __add__(self, other: Vec2) -> Vec2:
         if not isinstance(other, Vec2):
-            raise TypeError(f"Unsupported operand type(s) for +: 'Vector' and '{type(other)}'")
+            raise NotImplemented(f"Unsupported operand type(s) for +: 'Vector' and '{type(other)}'")
 
         return Vec2(self.x + other.x, self.y + other.y)
 
 
     def __sub__(self, other: Vec2) -> Vec2:
         if not isinstance(other, Vec2):
-            raise TypeError(f"Unsupported operand type(s) for -: 'Vector' and '{type(other)}'")
+            raise NotImplemented(f"Unsupported operand type(s) for -: 'Vector' and '{type(other)}'")
 
         return Vec2(self.x - other.x, self.y - other.y)
 
@@ -100,7 +99,7 @@ class Vec2:
         #   https://math.stackexchange.com/questions/4060569/intuition-for-multiplying-vectors-by-complex-scalars
         #   
         if not isinstance(other, (int, float, Vec2)):
-            raise TypeError(f"Unsupported operand type(s) for *: 'Vector' and '{type(other)}'")
+            raise NotImplemented(f"Unsupported operand type(s) for *: 'Vector' and '{type(other)}'")
 
         if type(other) != Vec2:
             return Vec2(self.x * other, self.y * other)
@@ -110,12 +109,12 @@ class Vec2:
 
 
     def __matmul__(self, other):
-        raise NotImplemented
+        raise Exception("TODO")
 
 
     def dot(self, other: Vec2) -> float:
         if not isinstance(other, (Vec2)):
-            raise TypeError(f"Unsupported operand type(s) for 'dot': 'Vector' and '{type(other)}'")
+            raise NotImplemented(f"Unsupported operand type(s) for 'dot': 'Vector' and '{type(other)}'")
 
         out = self * other
         out = out.x + out.y
@@ -136,7 +135,7 @@ class Vec2:
 
     def __truediv__(self, other: int | float) -> Vec2:
         if not isinstance(other, (int, float)):
-            raise TypeError(f"Unsupported operand type(s) for /: 'Vector' and '{type(other)}'")
+            raise NotImplemented(f"Unsupported operand type(s) for /: 'Vector' and '{type(other)}'")
 
         return Vec2(self.x / other, self.y / other)
 
@@ -182,7 +181,7 @@ class Phys:
         out = G * (
             m1 * m2 * (pos1 - pos2)
             /
-            ( abs(pos1 - pos2) ** 2 + soft ** 2) ** (3/2)
+            (abs(pos1 - pos2) ** 2 + soft ** 2) ** (3/2)
         )
         return -out
 
@@ -225,7 +224,7 @@ class Phys:
 
         v1 = \
         (((smass - emass) / cm) * vel1) + (((2 * emass) / cm) * vel2)
-        
+
         v2 = \
         ((2 * smass) / cm * vel1) + (((emass - smass) / cm) * vel2)
 
@@ -290,7 +289,7 @@ class Entity(arcade.Sprite):
 
         self.age = 0
 
-        self.draw_hit_box((0, 255, 0), 1)
+        #self.draw_hit_box((0, 255, 0), 1)
 
         #Have extra properties
 
@@ -331,7 +330,7 @@ class Entity(arcade.Sprite):
             mainforce += Phys.law_grav_vec_ent(self, ent, soft)
 
         return mainforce
-    
+
 
 
 
@@ -375,7 +374,7 @@ class Entity(arcade.Sprite):
                     continue
 
 
-        
+
         # #Bounce off edge
         # if (self.center_x > sim.width) or (self.center_x < 0) or (self.center_y > sim.height) or (self.center_y < 0):
         #     self.vel = -self.vel
@@ -425,7 +424,7 @@ class Sim(arcade.Window):
 
         self.objects = arcade.SpriteList()
         self.center_mass = arcade.SpriteCircle(5, (127, 127, 127))
-        
+
         self.manager = arcade.gui.UIManager()
         self.manager.enable()
 
@@ -498,7 +497,7 @@ class Sim(arcade.Window):
         self.objects.draw()
 
         self.center_mass.draw()
-        
+
         if self.draw_vecs:
             for _ in self.objects:
                 arcade.draw_line(
@@ -507,24 +506,32 @@ class Sim(arcade.Window):
                     arcade.color.WHITE, 2
                 )
 
-        
+
         if self.selected_object:
             arcade.draw_circle_outline(
                 self.selected_object.center_x, self.selected_object.center_y,
                 (max(self.selected_object.width, self.selected_object.height) // 2),
                 arcade.color.GREEN
             )
-        
+
 
 
         if (self.place_state == "Orbit") and (self.selected_object is not None) and (self.place):
             curBody = self.hover_shadow
 
+            # math.sqrt(
+            #     ((curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x) ** 2
+            #     + ((curBody.center_y + self.cam_sprites.position.y) - self.selected_object.center_y) ** 2
+            # ),
+
             arcade.draw_circle_outline(
                 self.selected_object.center_x, self.selected_object.center_y,
                 math.sqrt(
-                            ( (( curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x)) **2
-                          + ( (( curBody.center_y + self.cam_sprites.position.y) - self.selected_object.center_y)) **2),
+                    ((curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x) ** 2
+                    + ((curBody.center_y + self.cam_sprites.position.y) - self.selected_object.center_y) ** 2
+                ),
+
+                # ((self.cam_sprites.scale - 1) * 100)
 
                 arcade.color.GRAY_BLUE
             )
@@ -539,7 +546,7 @@ class Sim(arcade.Window):
         self.m_text.draw()
 
         self.place_state_text.draw()
-        
+
         if self.paused:
             self.paused_text.draw()
 
@@ -575,7 +582,7 @@ class Sim(arcade.Window):
             mass_center_vec /= total_mass
             self.center_mass.center_x = mass_center_vec.x
             self.center_mass.center_y = mass_center_vec.y
-        
+
 
 
 
@@ -597,9 +604,9 @@ class Sim(arcade.Window):
         #self.hover_shadow.scale = 1 / self.cam_sprites.scale
 
 
-        
+
         self.scroll()
-    
+
 
     def scroll(self):
         pos = PVec2(
@@ -607,7 +614,7 @@ class Sim(arcade.Window):
             (self.view_pos.y * 1 / self.cam_sprites.scale) - self.height / 2
         )
         self.cam_sprites.move_to(pos, self.view_speed)
-        
+
 
 
 
@@ -619,31 +626,29 @@ class Sim(arcade.Window):
         self.cam_ui.resize(int(width), int(height))
 
         self.view_pos = Vec2(0, 0)
-
         super().on_resize(width, height)
 
 
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
-        
+
         #print("MOUSE", x, y, "VIEW_POS", self.view_pos, "DMOUSE", self.view_pos.x - x, self.view_pos.y - y)
-       
+
         #print(self.cam_sprites.position)
         x, y = \
-        (self.cam_sprites.position.x * 1 / self.cam_sprites.scale) + x, \
-        (self.cam_sprites.position.y * 1 / self.cam_sprites.scale) + y
-
+        (self.cam_sprites.position.x) + x, \
+        (self.cam_sprites.position.y) + y
 
 
         #print("XY", x, y)
 
         #self.camera_sprites.use()
-        
+
 
         if (button == arcade.MOUSE_BUTTON_LEFT) and (self.place):
             cbody = self.bodys[self.current_body]
             self.objects.append(Entity(cbody.mass, x, y, cbody.file, cbody.scale))
-            
+
             #If we are set to make this body orbit another, find angle and velocity needed to make that happen
             # TODO, make it orbit nearest body if not selected?
             if (self.place_state == "Orbit") and (self.selected_object is not None):
@@ -680,7 +685,7 @@ class Sim(arcade.Window):
 
                 curObj.vel = new_vel
 
-                
+
 
 
         elif (button == arcade.MOUSE_BUTTON_LEFT) and not (self.place):
@@ -704,7 +709,7 @@ class Sim(arcade.Window):
 
     def on_mouse_enter(self, x: int, y: int):
             self.hover_shadow.visible = self.place
-    
+
     def on_mouse_leave(self, x: int, y: int):
         self.hover_shadow.visible = False
 
@@ -714,7 +719,8 @@ class Sim(arcade.Window):
 
         self.m_text.x = x
         self.m_text.y = y
-        self.m_text.text = f"({x}, {y}) | ({x * self.cam_sprites.scale}, {y * self.cam_sprites.scale})"
+        self.m_text.text = f"({x}, {y}) | ({self.cam_sprites.scale})"
+        # ({x * self.cam_sprites.scale}, {y * self.cam_sprites.scale})
 
 
 
@@ -742,7 +748,7 @@ class Sim(arcade.Window):
         if symbol == arcade.key.R:
             self.objects.clear()
 
-        
+
         # Deletes selected object
         if (symbol == arcade.key.DELETE) and (self.selected_object is not None):
             self.selected_object.kill()
@@ -764,7 +770,7 @@ class Sim(arcade.Window):
         if symbol == arcade.key.L:
             for _ in self.objects:
                 _.vel = Vec2(0, 0)
-        
+
 
 
         #Change placement state
@@ -773,21 +779,22 @@ class Sim(arcade.Window):
 
 
         if symbol == arcade.key.UP:
-            
+
             print(self.cam_sprites.scale)
 
-            self.cam_sprites.scale = round(self.cam_sprites.scale + .1, 1)
-            self.cam_sprites.set_projection()
+            if self.cam_sprites.scale < 2:
+                self.cam_sprites.scale = round(self.cam_sprites.scale + .1, 1)
+                self.cam_sprites.set_projection()
 
 
         if symbol == arcade.key.DOWN:
-            
+
             print(self.cam_sprites.scale)
 
             if self.cam_sprites.scale > .1:
                 self.cam_sprites.scale = round(self.cam_sprites.scale - .1, 1)
                 self.cam_sprites.set_projection()
-        
+
 
         if symbol == arcade.key.P:
             self.cam_sprites.scale = 1.0
@@ -819,7 +826,7 @@ class Sim(arcade.Window):
 
 
     def on_key_release(self, symbol: int, modifiers: int):
-        
+
         #Move Cam
         if symbol == arcade.key.W:
             self.w_pressed = False
