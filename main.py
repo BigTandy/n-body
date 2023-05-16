@@ -23,7 +23,7 @@ import random as rand
 
 
 
-HEIGHT = 1000
+HEIGHT = 800
 WIDTH = 1000
 TITLE = "GRAV"
 
@@ -403,6 +403,8 @@ class Entity(arcade.Sprite):
 
 
 
+
+
 from pyglet.math import Vec2 as PVec2
 
 
@@ -412,6 +414,7 @@ class Sim(arcade.Window):
         super().__init__(width, height, title, resizable=True)
         arcade.set_background_color(arcade.color.BLACK)
 
+        self.game_time = 0
 
         # WIDTH // 2, HEIGHT // 2
         self.view_pos = Vec2(0, 0)
@@ -425,8 +428,12 @@ class Sim(arcade.Window):
         self.objects = arcade.SpriteList()
         self.center_mass = arcade.SpriteCircle(5, (127, 127, 127))
 
-        self.manager = arcade.gui.UIManager()
-        self.manager.enable()
+        self.symbolic_middle = arcade.Sprite(None, center_x=0, center_y=0)
+        self.symbolic_middle.visible = False
+
+
+        #self.manager = arcade.gui.UIManager()
+        #self.manager.enable()
 
 
         #Placement state ,,, state
@@ -444,6 +451,8 @@ class Sim(arcade.Window):
         self.hover_shadow = Entity(0, 0, 0, "media/earthlike.png", )
         self.hover_shadow.color = (127, 127, 127)
         self.place = True
+
+        self.obj_scale = 1
 
         self.standard_mass = 25_000_000_000_000_000
 
@@ -471,7 +480,12 @@ class Sim(arcade.Window):
         )
 
 
-        self.m_text = arcade.Text("", 0, 0, font_size=8)
+        self.m_text = arcade.Text("", 0, 0, font_size=10)  #font size 8
+
+
+        self.selected_object_readout = arcade.Text(
+            "", 0, 150, font_size=10, anchor_x="left", anchor_y="top", multiline=True, width=225
+        )
 
 
         self.w_pressed = False
@@ -479,6 +493,8 @@ class Sim(arcade.Window):
         self.a_pressed = False
         self.d_pressed = False
         self.cam_speed = 2
+
+
 
 
 
@@ -542,10 +558,12 @@ class Sim(arcade.Window):
 
         self.hover_shadow.draw()
 
-
         self.m_text.draw()
 
         self.place_state_text.draw()
+
+        if self.selected_object is not None:
+            self.selected_object_readout.draw()
 
         if self.paused:
             self.paused_text.draw()
@@ -555,6 +573,18 @@ class Sim(arcade.Window):
 
 
     def on_update(self, delta_time: float):
+        self.game_time += delta_time
+
+        #every minute, resync the game scale size to a random object to ensure that floating point error
+        #   does not drift the real scale and the measured scale too far
+
+        if (self.game_time % 60) < 2:
+            if self.objects:
+                self.obj_scale = rand.choice(self.objects).scale
+                print(f"Scale Resync!, new scale: {self.obj_scale}")
+            else:
+                print("Failed to resync scale!, no objects to sync to!")
+
 
         if not self.paused:
             self.objects.on_update(delta_time)
@@ -600,6 +630,18 @@ class Sim(arcade.Window):
                 self.view_pos = Vec2(self.view_pos.x + self.cam_speed, self.view_pos.y)
 
 
+        if self.selected_object is not None:
+            # Make mass readout in Kilo-Units, Round age?,
+            self.selected_object_readout.text = f"""
+Name: ???
+Mass: {self.selected_object.mass / 10 ** 12} TU
+X, Y: {round(self.selected_object.center_x, 2)}, {round(self.selected_object.center_y, 2)}
+Age:  {round(self.selected_object.age, 2)}
+Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.y, 1)}"""
+            self.selected_object_readout.y = self.selected_object_readout.content_height
+            #self.selected_object_readout.width = self.selected_object_readout.content_width + 10
+
+
         #FIXME, Scale the shadow in relation to the sprites cam, might just have to make another cam for it
         #self.hover_shadow.scale = 1 / self.cam_sprites.scale
 
@@ -632,28 +674,29 @@ class Sim(arcade.Window):
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
 
-        #print("MOUSE", x, y, "VIEW_POS", self.view_pos, "DMOUSE", self.view_pos.x - x, self.view_pos.y - y)
+        # print("MOUSE", x, y, "VIEW_POS", self.view_pos, "DMOUSE", self.view_pos.x - x, self.view_pos.y - y)
 
         #print(self.cam_sprites.position)
+
+        # Updates the X Y Co-ords to the correct screen position by adjusting based on where the camera is looking
         x, y = \
         (self.cam_sprites.position.x) + x, \
         (self.cam_sprites.position.y) + y
 
 
-        #print("XY", x, y)
 
-        #self.camera_sprites.use()
+        # print("XY", x, y)
 
 
         if (button == arcade.MOUSE_BUTTON_LEFT) and (self.place):
             cbody = self.bodys[self.current_body]
-            self.objects.append(Entity(cbody.mass, x, y, cbody.file, cbody.scale))
+            self.objects.append(Entity(cbody.mass, x, y, cbody.file, cbody.scale * self.obj_scale))
 
             #If we are set to make this body orbit another, find angle and velocity needed to make that happen
             # TODO, make it orbit nearest body if not selected?
             if (self.place_state == "Orbit") and (self.selected_object is not None):
 
-                selObj: Entity = self.selected_object
+                selObj: Entity | arcade.Sprite = self.selected_object
                 curObj = self.objects[-1]
                 dist = math.sqrt( ((selObj.center_x - curObj.center_x)**2) + ((selObj.center_y - curObj.center_y)**2))
 
@@ -708,7 +751,7 @@ class Sim(arcade.Window):
 
 
     def on_mouse_enter(self, x: int, y: int):
-            self.hover_shadow.visible = self.place
+        self.hover_shadow.visible = self.place
 
     def on_mouse_leave(self, x: int, y: int):
         self.hover_shadow.visible = False
@@ -719,12 +762,45 @@ class Sim(arcade.Window):
 
         self.m_text.x = x
         self.m_text.y = y
-        self.m_text.text = f"({x}, {y}) | ({self.cam_sprites.scale})"
+
+        #===
+        nx, ny = \
+        (self.cam_sprites.position.x) + x, \
+        (self.cam_sprites.position.y) + y
+
+
+        self.m_text.text = f"({x}, {y}) | ({round(nx, 2)}, {round(ny, 2)})"
         # ({x * self.cam_sprites.scale}, {y * self.cam_sprites.scale})
 
 
+    def scale(self, obj: Entity | arcade.Sprite, scaler: int | float):
+        obj.rescale_relative_to_point(
+            ((self.width // 2) + self.cam_sprites.position.x, (self.height // 2) + self.cam_sprites.position.y),
+            scaler
+        )
 
     def on_key_press(self, symbol: int, modifiers: int):
+
+        if (symbol == arcade.key.I) and (self.selected_object is not None):
+            print(self.selected_object.pos)
+
+
+        if symbol == arcade.key.UP:
+            self.obj_scale *= .75
+            for obj in self.objects:
+                self.scale(obj, .75)
+
+        if symbol == arcade.key.DOWN:
+            self.obj_scale *= 1.25
+            for obj in self.objects:
+                self.scale(obj, 1.25)
+
+
+        if symbol == arcade.key.P:
+            # Reset the scale
+            for obj in self.objects:
+                self.scale(obj, 1 / self.obj_scale)
+            self.obj_scale = 1
 
 
         #Move Cam
@@ -778,27 +854,27 @@ class Sim(arcade.Window):
             self.place_state = self.place_states[(self.place_states.index(self.place_state) + 1) % len(self.place_states)]
 
 
-        if symbol == arcade.key.UP:
-
-            print(self.cam_sprites.scale)
-
-            if self.cam_sprites.scale < 2:
-                self.cam_sprites.scale = round(self.cam_sprites.scale + .1, 1)
-                self.cam_sprites.set_projection()
-
-
-        if symbol == arcade.key.DOWN:
-
-            print(self.cam_sprites.scale)
-
-            if self.cam_sprites.scale > .1:
-                self.cam_sprites.scale = round(self.cam_sprites.scale - .1, 1)
-                self.cam_sprites.set_projection()
-
-
-        if symbol == arcade.key.P:
-            self.cam_sprites.scale = 1.0
-            self.cam_sprites.set_projection()
+        # if symbol == arcade.key.UP:
+        #
+        #     print(self.cam_sprites.scale)
+        #
+        #     if self.cam_sprites.scale < 2:
+        #         self.cam_sprites.scale = round(self.cam_sprites.scale + .1, 1)
+        #         self.cam_sprites.set_projection()
+        #
+        #
+        # if symbol == arcade.key.DOWN:
+        #
+        #     print(self.cam_sprites.scale)
+        #
+        #     if self.cam_sprites.scale > .1:
+        #         self.cam_sprites.scale = round(self.cam_sprites.scale - .1, 1)
+        #         self.cam_sprites.set_projection()
+        #
+        #
+        # if symbol == arcade.key.P:
+        #     self.cam_sprites.scale = 1.0
+        #     self.cam_sprites.set_projection()
 
 
 
@@ -849,15 +925,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
