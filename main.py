@@ -10,7 +10,7 @@ else:
 
 import math
 import random as rand
-
+import statistics as stats
 
 
 # Copyright (C) 2023 Bud P. L. Patterson
@@ -271,6 +271,27 @@ class Phys:
         )
 
 
+    @staticmethod
+    def grav_potential_energy(m1: int | float, m2: int | float, dist: int | float):
+        # https://en.wikipedia.org/wiki/Potential_energy#Potential_energy_for_gravitational_forces_between_two_bodies
+        return - (G * m1 * m2) / dist
+
+
+    @staticmethod
+    def reduced_mass(m1: int | float, m2: int | float) -> int | float:
+        # https://en.wikipedia.org/wiki/Reduced_mass
+        return m1 * m2 / m1 + m2
+
+
+    @staticmethod
+    def effective_potential():
+        # https://en.wikipedia.org/wiki/Effective_potential
+        # https://physics.stackexchange.com/questions/83602/determine-if-an-object-is-in-orbit
+        pass
+
+
+
+
 class Astronomy:
     """
     Class to hold misc stuff, e.g. (Planet names and other stuff)
@@ -298,6 +319,11 @@ class Entity(arcade.Sprite):
         #TODO, Determine Entity's orbital state, e.g. (Orbiting, SubOrbital?, "Static")
 
         self.name = rand.choice(Astronomy.planet_names)
+        self.info_text = arcade.Text(
+            f"{self.name}",
+            (x + (self.width // 2)) * math.cos(math.radians(45)), (y + (self.width // 2)) * math.sin(math.radians(45)),
+            font_size=8, anchor_x="left")
+
 
         self.mass = mass
         self.file = file
@@ -406,6 +432,10 @@ class Entity(arcade.Sprite):
 
         self.age += delta_time
 
+        #Update Flavor? Text POS
+        self.info_text.x = (self.center_x + (self.width // 4)) * math.cos(math.radians(45))
+        self.info_text.y = (self.center_y + (self.width // 4)) * math.sin(math.radians(45))
+
 
 
 
@@ -420,15 +450,14 @@ class Sim(arcade.Window):
         super().__init__(width, height, title, resizable=True)
         arcade.set_background_color(arcade.color.BLACK)
 
+        self.cam_ui = arcade.Camera(WIDTH, HEIGHT)
+        self.cam_sprites = arcade.Camera(WIDTH, HEIGHT)
+
         self.game_time = 0
 
         # WIDTH // 2, HEIGHT // 2
         self.view_pos = Vec2(0, 0)
         self.view_speed = .4
-
-
-        self.cam_ui = arcade.Camera(WIDTH, HEIGHT)
-        self.cam_sprites = arcade.Camera(WIDTH, HEIGHT)
 
 
         self.objects = arcade.SpriteList()
@@ -460,7 +489,8 @@ class Sim(arcade.Window):
 
         self.obj_scale = 1
 
-        self.standard_mass = 25_000_000_000_000_000
+       #self.standard_mass = 25_000_000_000_000_000
+        self.standard_mass = 1_000_000_000_000_000
 
         self.bodys = [
             Entity(self.standard_mass // 2, 0, 0, "media/earthlike.png", ),
@@ -504,7 +534,6 @@ class Sim(arcade.Window):
 
 
 
-
     def setup(self):
         pass
 
@@ -517,6 +546,8 @@ class Sim(arcade.Window):
         self.cam_sprites.use()
 
         self.objects.draw()
+        # for _ in self.objects:
+        #     _.info_text.draw()
 
         self.center_mass.draw()
 
@@ -584,12 +615,13 @@ class Sim(arcade.Window):
         #every minute, resync the game scale size to a random object to ensure that floating point error
         #   does not drift the real scale and the measured scale too far
 
-        if (self.game_time % 60) < 2:
-            if self.objects:
-                self.obj_scale = rand.choice(self.objects).scale
-                print(f"Scale Resync!, new scale: {self.obj_scale}")
-            else:
-                print("Failed to resync scale!, no objects to sync to!")
+        # if (self.game_time % 60) < 2:
+        #     if self.objects:
+        #         #self.obj_scale = rand.choice(self.objects).scale
+        #         self.obj_scale = stats.mode(map(lambda x: x.scale, self.objects))
+        #         print(f"Scale Resync!, new scale: {self.obj_scale}")
+        #     else:
+        #         print("Failed to resync scale!, no objects to sync to!")
 
 
         if not self.paused:
@@ -639,8 +671,8 @@ class Sim(arcade.Window):
         if self.selected_object is not None:
             # Make mass readout in Kilo-Units, Round age?,
             self.selected_object_readout.text = f"""
-Name: ???
-Mass: {self.selected_object.mass / 10 ** 12} TU
+Name: {self.selected_object.name}
+Mass: {self.selected_object.mass / 10 ** 12 :,} TU
 X, Y: {round(self.selected_object.center_x, 2)}, {round(self.selected_object.center_y, 2)}
 Age:  {round(self.selected_object.age, 2)}
 Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.y, 1)}"""
@@ -794,23 +826,27 @@ Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.
         if (symbol == arcade.key.I) and (self.selected_object is not None):
             print(self.selected_object.pos)
 
+        incri = .125
 
         if symbol == arcade.key.UP:
-            self.obj_scale *= .75
+            self.obj_scale *= 1 - incri
             for obj in self.objects:
-                self.scale(obj, .75)
+                self.scale(obj, (1 - incri))
 
         if symbol == arcade.key.DOWN:
-            self.obj_scale *= 1.25
+            self.obj_scale *= 1 + incri
             for obj in self.objects:
-                self.scale(obj, 1.25)
+                self.scale(obj, (1 + incri))
 
 
-        if symbol == arcade.key.P:
+        if (symbol == arcade.key.P) and (modifiers != arcade.key.MOD_SHIFT):
             # Reset the scale
             for obj in self.objects:
                 self.scale(obj, 1 / self.obj_scale)
             self.obj_scale = 1
+        elif (symbol == arcade.key.P) and (modifiers == arcade.key.MOD_SHIFT):
+            for obj in self.objects:
+                obj.scale = 1
 
 
         #Move Cam
@@ -833,6 +869,7 @@ Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.
         #Clear all objects
         if symbol == arcade.key.R:
             self.objects.clear()
+            self.obj_scale = 1
 
 
         # Deletes selected object
