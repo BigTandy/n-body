@@ -271,6 +271,22 @@ class Phys:
         )
 
 
+class Astronomy:
+    """
+    Class to hold misc stuff, e.g. (Planet names and other stuff)
+    """
+
+    # TODO Break down by type?
+    planet_names = [
+        "Mercury",
+        "Venus",
+        "Earth",
+        "Mars",
+        "Jupiter"
+    ]
+
+
+
 
 
 class Entity(arcade.Sprite):
@@ -278,6 +294,10 @@ class Entity(arcade.Sprite):
     def __init__(self, mass: int, x: int, y: int, file: str, scale: float=1, *args, **kwargs):
 
         super().__init__(filename=file, scale=scale, *args, **kwargs)
+
+        #TODO, Determine Entity's orbital state, e.g. (Orbiting, SubOrbital?, "Static")
+
+        self.name = rand.choice(Astronomy.planet_names)
 
         self.mass = mass
         self.file = file
@@ -375,20 +395,6 @@ class Entity(arcade.Sprite):
 
 
 
-        # #Bounce off edge
-        # if (self.center_x > sim.width) or (self.center_x < 0) or (self.center_y > sim.height) or (self.center_y < 0):
-        #     self.vel = -self.vel
-
-
-        # #Delete ent if too far
-        # deldist = 10
-        # if (self.center_x > sim.width + deldist) or (self.center_x < 0 - deldist) or (self.center_y > sim.height + deldist) or (self.center_y < 0 - deldist):
-        #     #self.kill()
-        #     self.vel = Vec2(0, 0)
-        #     self.pos = Vec2(sim.width / 2, sim.height / 2)
-
-
-
 
         # Soft=10 is ok
         # Soft=20 is better
@@ -473,6 +479,7 @@ class Sim(arcade.Window):
 
 
         self.selected_object: Entity | None = None
+        self.tracking_object = True  #TODO
 
         self.paused = False
         self.paused_text = arcade.Text(
@@ -493,7 +500,6 @@ class Sim(arcade.Window):
         self.a_pressed = False
         self.d_pressed = False
         self.cam_speed = 2
-
 
 
 
@@ -532,7 +538,7 @@ class Sim(arcade.Window):
 
 
 
-        if (self.place_state == "Orbit") and (self.selected_object is not None) and (self.place):
+        if (self.place_state == "Orbit") and (self.selected_object is not None) and self.place:
             curBody = self.hover_shadow
 
             # math.sqrt(
@@ -774,8 +780,12 @@ Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.
 
 
     def scale(self, obj: Entity | arcade.Sprite, scaler: int | float):
+        # obj.rescale_relative_to_point(
+        #     ((self.width // 2) + self.cam_sprites.position.x, (self.height // 2) + self.cam_sprites.position.y),
+        #     scaler
+        # )
         obj.rescale_relative_to_point(
-            ((self.width // 2) + self.cam_sprites.position.x, (self.height // 2) + self.cam_sprites.position.y),
+            (0, 0),
             scaler
         )
 
