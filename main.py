@@ -80,14 +80,14 @@ class Vec2:
 
     def __add__(self, other: Vec2) -> Vec2:
         if not isinstance(other, Vec2):
-            raise NotImplemented(f"Unsupported operand type(s) for +: 'Vector' and '{type(other)}'")
+            raise NotImplementedError(f"Unsupported operand type(s) for +: 'Vector' and '{type(other)}'")
 
         return Vec2(self.x + other.x, self.y + other.y)
 
 
     def __sub__(self, other: Vec2) -> Vec2:
         if not isinstance(other, Vec2):
-            raise NotImplemented(f"Unsupported operand type(s) for -: 'Vector' and '{type(other)}'")
+            raise NotImplementedError(f"Unsupported operand type(s) for -: 'Vector' and '{type(other)}'")
 
         return Vec2(self.x - other.x, self.y - other.y)
 
@@ -97,9 +97,9 @@ class Vec2:
         #   Complex Multiplication
         #   https://www.physicsforums.com/threads/multiplying-a-vector-by-a-complex-number.897606/
         #   https://math.stackexchange.com/questions/4060569/intuition-for-multiplying-vectors-by-complex-scalars
-        #   
+        #
         if not isinstance(other, (int, float, Vec2)):
-            raise NotImplemented(f"Unsupported operand type(s) for *: 'Vector' and '{type(other)}'")
+            raise NotImplementedError(f"Unsupported operand type(s) for *: 'Vector' and '{type(other)}'")
 
         if type(other) != Vec2:
             return Vec2(self.x * other, self.y * other)
@@ -114,17 +114,28 @@ class Vec2:
 
     def dot(self, other: Vec2) -> float:
         if not isinstance(other, (Vec2)):
-            raise NotImplemented(f"Unsupported operand type(s) for 'dot': 'Vector' and '{type(other)}'")
+            raise NotImplementedError(f"Unsupported operand type(s) for 'dot': 'Vector' and '{type(other)}'")
 
         out = self * other
         out = out.x + out.y
         return out
 
 
+    def angle_between(self, other: Vec2) -> float:
+        """Return the angle between two vectors in radians"""
+        if not isinstance(other, (Vec2)):
+            raise NotImplementedError(f"Unsupported operand type(s) for 'angle_between': 'Vector' and '{type(other)}'")
+
+        dot = self.dot(other)
+        return math.acos(dot / self.mag * other.mag)
+
+
+    @property
     def mag(self) -> float | int:
         return math.sqrt(self.x**2 + self.y**2)
 
 
+    @property
     def heading(self) -> float | int:
         return math.atan2(self.y, self.x)
 
@@ -135,7 +146,7 @@ class Vec2:
 
     def __truediv__(self, other: int | float) -> Vec2:
         if not isinstance(other, (int, float)):
-            raise NotImplemented(f"Unsupported operand type(s) for /: 'Vector' and '{type(other)}'")
+            raise NotImplementedError(f"Unsupported operand type(s) for /: 'Vector' and '{type(other)}'")
 
         return Vec2(self.x / other, self.y / other)
 
@@ -187,6 +198,12 @@ class Phys:
 
 
     @staticmethod
+    def standard_grav_parameter(m1: int | float, m2: int | float) -> int | float:
+        #FIXME, Negitive?
+        return G * (m1 + m2)
+
+
+    @staticmethod
     def law_grav_vec_ent(ent1: Entity | arcade.Sprite, ent2: Entity | arcade.Sprite, soft:int=0):
         return Phys.law_grav_vec(ent1.mass, ent2.mass, ent1.pos, ent2.pos, soft)
 
@@ -200,6 +217,10 @@ class Phys:
     def law_accl_from_force(mass: int, force: Vec2) -> Vec2:
         return force / mass
 
+
+    @staticmethod
+    def calc_momentum(mass: int | float, vel: Vec2) -> Vec2:
+        return mass * vel
 
     @staticmethod
     def elastic_collision(m1: int, m2: int, vel1: Vec2, vel2: Vec2) -> tuple[Vec2, Vec2]:
@@ -265,9 +286,19 @@ class Phys:
 
 
     @staticmethod
-    def calc_needed_orbit_speed(m1: int, m2: int, r: float) -> float:
+    def calc_orbit_speed_circular(m1: int, m2: int, r: float) -> float:
+        """Circular Orbit Speed Calculation"""
         return math.sqrt(
             (G * (m1 + m2)) / r
+        )
+        # https://physics.stackexchange.com/questions/546229/what-determines-if-an-object-will-stay-in-a-planets-orbit
+
+
+    @staticmethod
+    def calc_orbit_speed_elip(m1: int | float, m2: int | float, r: int | float, semi_major_axis: int | float) -> float:
+        """Eliptical Orbit Speed Calculation"""
+        return math.sqrt(
+            (G * (m1 + m2))
         )
 
 
@@ -307,7 +338,30 @@ class Astronomy:
     ]
 
 
+    @staticmethod
+    def calculate_semi_major_axis():
+        pass
 
+
+    @staticmethod
+    def calc_orb_period_circle(m1: int | float, m2: int | float, rad: int | float):
+        # https://en.wikipedia.org/wiki/Circular_orbit#Angular_speed_and_orbital_period
+        return 2 * math.pi * math.sqrt(
+            rad ** 3 / Phys.standard_grav_parameter(m1, m2)
+        )
+
+
+    @staticmethod
+    def calc_angular_momentum_c(m: int | float, f: int | float, r: int | float) -> int | float:
+        """
+
+        :param m: Mass of orbiting Body
+        :param f: Orbital Period
+        :param r: Orbital Radius
+        :return:
+        """
+        # https://en.wikipedia.org/wiki/Angular_momentum#Examples
+        return 2 * math.pi * m * f * r **2
 
 
 class Entity(arcade.Sprite):
@@ -322,7 +376,7 @@ class Entity(arcade.Sprite):
         self.info_text = arcade.Text(
             f"{self.name}",
             (x + (self.width // 2)) * math.cos(math.radians(45)), (y + (self.width // 2)) * math.sin(math.radians(45)),
-            font_size=8, anchor_x="left")
+            font_size=10, anchor_x="left")
 
 
         self.mass = mass
@@ -373,7 +427,7 @@ class Entity(arcade.Sprite):
         for ent in sim.objects:
             if ent == self:
                 continue
-            mainforce += Phys.law_grav_vec_ent(self, ent, soft)
+            mainforce += Phys.law_grav_vec_ent(self, ent, soft) * sim.obj_scale  #FIXME, Scale correct?
 
         return mainforce
 
@@ -433,8 +487,10 @@ class Entity(arcade.Sprite):
         self.age += delta_time
 
         #Update Flavor? Text POS
-        self.info_text.x = (self.center_x + (self.width // 4)) * math.cos(math.radians(45))
-        self.info_text.y = (self.center_y + (self.width // 4)) * math.sin(math.radians(45))
+        #self.info_text.x = (self.center_x + (self.width // 4)) * math.cos(math.radians(45))
+        #self.info_text.y = (self.center_y + (self.width // 4)) * math.sin(math.radians(45))
+        self.info_text.x = (self.center_x + (self.width // 4))# * math.cos(math.radians(45))
+        self.info_text.y = (self.center_y + (self.width // 4))# * math.sin(math.radians(45))
 
 
 
@@ -482,10 +538,7 @@ class Sim(arcade.Window):
         self.place_states = ["Static", "Orbit"]
         self.place_state = "Static"
 
-        #Mouse hover shadow
-        self.hover_shadow = Entity(0, 0, 0, "media/earthlike.png", )
-        self.hover_shadow.color = (127, 127, 127)
-        self.place = True
+
 
         self.obj_scale = 1
 
@@ -499,6 +552,11 @@ class Sim(arcade.Window):
             Entity(self.standard_mass * 500, 0, 0, "media/gas_giant_25.png", .4)
         ]
 
+        #Mouse hover shadow
+        self.hover_shadow = self.bodys[0]
+        self.hover_shadow.color = (127, 127, 127)
+        self.place = True
+
         for _ in self.bodys:
             _.color = (170, 170, 170)
 
@@ -508,7 +566,7 @@ class Sim(arcade.Window):
         self.draw_vecs = False
 
 
-        self.selected_object: Entity | None = None
+        self.selected_object: list[Entity | arcade.Sprite] = []
         self.tracking_object = True  #TODO
 
         self.paused = False
@@ -546,8 +604,8 @@ class Sim(arcade.Window):
         self.cam_sprites.use()
 
         self.objects.draw()
-        # for _ in self.objects:
-        #     _.info_text.draw()
+        for _ in self.objects:
+            _.info_text.draw()
 
         self.center_mass.draw()
 
@@ -561,15 +619,30 @@ class Sim(arcade.Window):
 
 
         if self.selected_object:
-            arcade.draw_circle_outline(
-                self.selected_object.center_x, self.selected_object.center_y,
-                (max(self.selected_object.width, self.selected_object.height) // 2),
-                arcade.color.GREEN
+            for obx, obj in enumerate(self.selected_object):
+                arcade.draw_circle_outline(
+                    obj.center_x, obj.center_y,
+                    (max(obj.width, obj.height) // 2),
+                    #arcade.color.GREEN
+                    (round(((obx % 5) / 5) * 255) * 10, 255, round(((obx % 3) / 3) * 255) )
+                )
+
+
+        if len(self.selected_object) > 1:
+            mass_center_vec = Vec2(0, 0)
+
+            total_mass = sum(map(lambda x: x.mass, self.selected_object))
+
+            mass_center_vec += sum(map(lambda x: x.pos * x.mass, self.selected_object), start=Vec2(0, 0))
+
+            mass_center_vec /= total_mass
+            arcade.draw_circle_filled(
+                mass_center_vec.x, mass_center_vec.y, 5, arcade.color.GRAY_BLUE
             )
 
 
 
-        if (self.place_state == "Orbit") and (self.selected_object is not None) and self.place:
+        if (self.place_state == "Orbit") and self.selected_object and self.place:
             curBody = self.hover_shadow
 
             # math.sqrt(
@@ -578,10 +651,10 @@ class Sim(arcade.Window):
             # ),
 
             arcade.draw_circle_outline(
-                self.selected_object.center_x, self.selected_object.center_y,
+                self.selected_object[0].center_x, self.selected_object[0].center_y,
                 math.sqrt(
-                    ((curBody.center_x + self.cam_sprites.position.x) - self.selected_object.center_x) ** 2
-                    + ((curBody.center_y + self.cam_sprites.position.y) - self.selected_object.center_y) ** 2
+                    ((curBody.center_x + self.cam_sprites.position.x) - self.selected_object[0].center_x) ** 2
+                    + ((curBody.center_y + self.cam_sprites.position.y) - self.selected_object[0].center_y) ** 2
                 ),
 
                 # ((self.cam_sprites.scale - 1) * 100)
@@ -599,7 +672,7 @@ class Sim(arcade.Window):
 
         self.place_state_text.draw()
 
-        if self.selected_object is not None:
+        if self.selected_object:
             self.selected_object_readout.draw()
 
         if self.paused:
@@ -655,8 +728,8 @@ class Sim(arcade.Window):
 
 
 
-        if self.selected_object is not None:
-            self.view_pos = self.selected_object.pos
+        if self.selected_object:
+            self.view_pos = self.selected_object[0].pos
         else:
             if self.w_pressed:
                 self.view_pos = Vec2(self.view_pos.x, self.view_pos.y + self.cam_speed)
@@ -668,16 +741,44 @@ class Sim(arcade.Window):
                 self.view_pos = Vec2(self.view_pos.x + self.cam_speed, self.view_pos.y)
 
 
-        if self.selected_object is not None:
+        if self.selected_object:
+
+            systemtext = ""
+            if len(self.selected_object) > 1:
+
+                systemtext = f"""
+{' - '.join(map(lambda x: x.name, self.selected_object))} System:
+Total Mass: {sum(map(lambda x: x.mass, self.selected_object)) / 10 ** 12:,} TU
+Gravitational Potential Energy: {
+                round(Phys.grav_potential_energy(self.selected_object[0].mass, self.selected_object[1].mass,
+                                                 arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])) / 10 ** 12 * self.obj_scale, 2):,} TJ
+Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_object[1].mass) / 10 ** 12:,} TU
+Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
+"""
+
             # Make mass readout in Kilo-Units, Round age?,
-            self.selected_object_readout.text = f"""
-Name: {self.selected_object.name}
-Mass: {self.selected_object.mass / 10 ** 12 :,} TU
-X, Y: {round(self.selected_object.center_x, 2)}, {round(self.selected_object.center_y, 2)}
-Age:  {round(self.selected_object.age, 2)}
-Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.y, 1)}"""
+            individual_text = f"""
+{self.selected_object[0].name}:
+Mass: {self.selected_object[0].mass / 10 ** 12 :,} TU
+X, Y: {round(self.selected_object[0].center_x, 2)}, {round(self.selected_object[0].center_y, 2)}
+Age:  {round(self.selected_object[0].age, 2)}
+Velocity: {round(self.selected_object[0].vel.x, 1), round(self.selected_object[0].vel.y, 1)}
+Speed: {round(self.selected_object[0].vel.mag)}
+"""
+
+
+            if len(self.selected_object) == 1:
+                self.selected_object_readout.text = individual_text
+            else:
+                self.selected_object_readout.text = systemtext
+
             self.selected_object_readout.y = self.selected_object_readout.content_height
             #self.selected_object_readout.width = self.selected_object_readout.content_width + 10
+
+        else:
+            self.selected_object_readout.text = ""
+
+
 
 
         #FIXME, Scale the shadow in relation to the sprites cam, might just have to make another cam for it
@@ -732,13 +833,13 @@ Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.
 
             #If we are set to make this body orbit another, find angle and velocity needed to make that happen
             # TODO, make it orbit nearest body if not selected?
-            if (self.place_state == "Orbit") and (self.selected_object is not None):
+            if (self.place_state == "Orbit") and self.selected_object:
 
-                selObj: Entity | arcade.Sprite = self.selected_object
+                selObj: Entity | arcade.Sprite = self.selected_object[0]
                 curObj = self.objects[-1]
                 dist = math.sqrt( ((selObj.center_x - curObj.center_x)**2) + ((selObj.center_y - curObj.center_y)**2))
 
-                speed_needed = Phys.calc_needed_orbit_speed(
+                speed_needed = Phys.calc_orbit_speed_circular(
                     selObj.mass, curObj.mass,
                     dist
                 )
@@ -761,7 +862,7 @@ Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.
 
                 new_vel = Vec2(x_comp, y_comp)
                 new_vel = Vec2(new_vel.y * -1, new_vel.x)  # Rotate vector by -90 Degrees
-                new_vel = new_vel / new_vel.mag()  # Need to make it into a unit vector before applying speed
+                new_vel = new_vel / new_vel.mag  # Need to make it into a unit vector before applying speed
                 new_vel *= speed_needed
 
                 curObj.vel = new_vel
@@ -769,16 +870,21 @@ Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.
 
 
 
-        elif (button == arcade.MOUSE_BUTTON_LEFT) and not (self.place):
+        elif (button == arcade.MOUSE_BUTTON_LEFT) and not self.place:
             #Run selecting object code here
-            self.selected_object = arcade.get_sprites_at_point((x, y), self.objects)
+            clicked_object = arcade.get_sprites_at_point((x, y), self.objects)
 
             # Check to see if we actually clicked on an object: If yes make that the current object, if not, make None
-            if self.selected_object:
-                self.selected_object = self.selected_object[-1] #-1 to grab the top-most object
+            if clicked_object:
+                if modifiers != arcade.key.MOD_SHIFT:
+                    self.selected_object.clear()
+                    self.selected_object.insert(0, clicked_object[-1])  #-1 to grab the top-most object
+                else:
+                    if clicked_object[-1] not in self.selected_object:
+                        self.selected_object.append(clicked_object[-1])
             else:
-                self.selected_object = None
-            print(self.selected_object)
+                self.selected_object.clear()
+            #print(self.selected_object)
 
 
 
@@ -823,8 +929,9 @@ Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.
 
     def on_key_press(self, symbol: int, modifiers: int):
 
-        if (symbol == arcade.key.I) and (self.selected_object is not None):
-            print(self.selected_object.pos)
+        if (symbol == arcade.key.I) and (self.selected_object):
+            for _ in self.selected_object:
+                print(_.pos)
 
         incri = .125
 
@@ -872,10 +979,11 @@ Velocity: {round(self.selected_object.vel.x, 1), round(self.selected_object.vel.
             self.obj_scale = 1
 
 
-        # Deletes selected object
-        if (symbol == arcade.key.DELETE) and (self.selected_object is not None):
-            self.selected_object.kill()
-            self.selected_object = None
+        # Deletes selected object(s)
+        if (symbol == arcade.key.DELETE) and self.selected_object:
+            for obj in self.selected_object:
+                obj.kill()
+            self.selected_object.clear()
 
 
         #Show Vectors
