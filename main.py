@@ -199,7 +199,7 @@ class Phys:
 
     @staticmethod
     def standard_grav_parameter(m1: int | float, m2: int | float) -> int | float:
-        #FIXME, Negitive?
+        #FIXME, Negative?
         return G * (m1 + m2)
 
 
@@ -321,6 +321,34 @@ class Phys:
         pass
 
 
+    @staticmethod
+    def calc_angular_momentum_c(m: int | float, f: int | float, r: int | float) -> int | float:
+        """
+
+        :param m: Mass of orbiting Body
+        :param f: Orbital Period
+        :param r: Orbital Radius
+        :return:
+        """
+        # https://en.wikipedia.org/wiki/Angular_momentum#Examples
+        return 2 * math.pi * m * f * r ** 2
+
+
+    @staticmethod
+    def calc_specific_orbital_energy(m1: float, m2: float, r: float, v: float) -> float:
+        # https://en.wikipedia.org/wiki/Specific_orbital_energy
+        """
+
+        :param m1: Mass of object 1
+        :param m2: Mass of object 2
+        :param r:  Distance between objects
+        :param v:  Relative Orbital Speed
+        :return:
+        """
+
+        return (v ** 2 / 2) - (Phys.standard_grav_parameter(m1, m2) / r)
+
+
 
 
 class Astronomy:
@@ -352,16 +380,27 @@ class Astronomy:
 
 
     @staticmethod
-    def calc_angular_momentum_c(m: int | float, f: int | float, r: int | float) -> int | float:
+    def calc_eccentricity(m1: float, m2: float, r: float, v: float,):
+        # https://en.wikipedia.org/wiki/Specific_orbital_energy
         """
-
-        :param m: Mass of orbiting Body
-        :param f: Orbital Period
-        :param r: Orbital Radius
+        Calculates the Orbital Eccentricity of two bodys
+        :param m1: Mass of Orbiting Body
+        :param m2: Mass of Parent Body
+        :param r:  Distance
+        :param v:  Orbital Speed
         :return:
         """
-        # https://en.wikipedia.org/wiki/Angular_momentum#Examples
-        return 2 * math.pi * m * f * r **2
+        return math.sqrt(
+            1 + (
+                2 * Phys.calc_specific_orbital_energy(m1, m2, r, v) *
+                (Phys.calc_angular_momentum_c(m1, Astronomy.calc_orb_period_circle(m1, m2, r), r) / Phys.reduced_mass(m1, m2)) ** 2 \
+                /
+                Phys.standard_grav_parameter(m1, m2) ** 2
+            )
+        )
+
+
+
 
 
 class Entity(arcade.Sprite):
@@ -498,7 +537,7 @@ class Entity(arcade.Sprite):
 
 
 from pyglet.math import Vec2 as PVec2
-
+from typing import NewType
 
 class Sim(arcade.Window):
 
@@ -610,10 +649,10 @@ class Sim(arcade.Window):
         self.center_mass.draw()
 
         if self.draw_vecs:
-            for _ in self.objects:
+            for obj in self.objects:
                 arcade.draw_line(
-                    _.center_x, _.center_y,
-                    _.center_x + _.vel.x, _.center_y + _.vel.y,
+                    obj.center_x, obj.center_y,
+                    obj.center_x + obj.vel.x, obj.center_y + obj.vel.y,
                     arcade.color.WHITE, 2
                 )
 
@@ -754,6 +793,8 @@ Gravitational Potential Energy: {
                                                  arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])) / 10 ** 12 * self.obj_scale, 2):,} TJ
 Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_object[1].mass) / 10 ** 12:,} TU
 Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
+Eccentricity: {Astronomy.calc_eccentricity(self.selected_object[0].mass, self.selected_object[1].mass, 
+                arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), self.selected_object[0].vel.mag)}
 """
 
             # Make mass readout in Kilo-Units, Round age?,
