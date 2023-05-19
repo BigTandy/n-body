@@ -92,7 +92,7 @@ class Vec2:
         return Vec2(self.x - other.x, self.y - other.y)
 
 
-    def __mul__(self, other: int | float | Vec2 ) -> Vec2:
+    def __mul__(self, other: int | float | Vec2) -> Vec2:
         #TODO:
         #   Complex Multiplication
         #   https://www.physicsforums.com/threads/multiplying-a-vector-by-a-complex-number.897606/
@@ -105,11 +105,21 @@ class Vec2:
             return Vec2(self.x * other, self.y * other)
         else:
             #We are doing Vec multiplication
-            Vec2(self.x * other.x, self.y * other.y)
+            return Vec2(self.x * other.x, self.y * other.y)
 
 
     def __matmul__(self, other):
         raise Exception("TODO")
+
+
+    def __pow__(self, power, modulo=None) -> Vec2 | float | int:
+        # FIXME; INNCORRECT
+        # https://www.euclideanspace.com/maths/algebra/vectors/vecAlgebra/powers/index.htm
+        raise NotImplementedError
+        # init = Vec2(self.x, self.y)
+        # for times in range(power):
+        #     init *= Vec2(self.x, self.y)
+        # return init
 
 
     def dot(self, other: Vec2) -> float:
@@ -157,7 +167,7 @@ class Vec2:
     def __rsub__(self, other: Vec2) -> Vec2:
         return self.__sub__(other)
 
-    def __rmul__(self, other: int | float) -> Vec2:
+    def __rmul__(self, other: int | float | Vec2) -> Vec2:
         return self.__mul__(other)
 
     def __rdiv__(self, other: int | float) -> Vec2:
@@ -173,6 +183,10 @@ class Vec2:
         return f"""
 Vector <{self.x}, {self.y}>
 """
+
+
+
+
 
 
 
@@ -288,6 +302,7 @@ class Phys:
     @staticmethod
     def calc_orbit_speed_circular(m1: int, m2: int, r: float) -> float:
         """Circular Orbit Speed Calculation"""
+        # FIXME POTENTIALLY WRONG
         return math.sqrt(
             (G * (m1 + m2)) / r
         )
@@ -297,6 +312,8 @@ class Phys:
     @staticmethod
     def calc_orbit_speed_elip(m1: int | float, m2: int | float, r: int | float, semi_major_axis: int | float) -> float:
         """Eliptical Orbit Speed Calculation"""
+        # Is this finished???
+        #FIXME
         return math.sqrt(
             (G * (m1 + m2))
         )
@@ -337,6 +354,7 @@ class Phys:
     @staticmethod
     def calc_specific_orbital_energy(m1: float, m2: float, r: float, v: float) -> float:
         # https://en.wikipedia.org/wiki/Specific_orbital_energy
+        # https://space.stackexchange.com/questions/1904/how-to-programmatically-calculate-orbital-elements-using-position-velocity-vecto
         """
 
         :param m1: Mass of object 1
@@ -366,13 +384,16 @@ class Astronomy:
     ]
 
 
-    @staticmethod
-    def calculate_semi_major_axis():
-        pass
+    # https://space.stackexchange.com/questions/1904/how-to-programmatically-calculate-orbital-elements-using-position-velocity-vecto
 
+    # https://space.stackexchange.com/questions/58136/compute-orbital-parameters-from-transverse-and-radial-velocity-at-a-given-distan
+
+    # https://en.wikipedia.org/wiki/Vis-viva_equation
+
+    # https://en.wikipedia.org/wiki/Electrodynamic_tether , not related, just really cool
 
     @staticmethod
-    def calc_orb_period_circle(m1: int | float, m2: int | float, rad: int | float):
+    def calc_orb_period_circle(m1: int | float, m2: int | float, rad: int | float) -> float:
         # https://en.wikipedia.org/wiki/Circular_orbit#Angular_speed_and_orbital_period
         return 2 * math.pi * math.sqrt(
             rad ** 3 / Phys.standard_grav_parameter(m1, m2)
@@ -380,7 +401,7 @@ class Astronomy:
 
 
     @staticmethod
-    def calc_eccentricity(m1: float, m2: float, r: float, v: float,):
+    def calc_eccentricity(m1: float, m2: float, r: float, v: float,) -> float:
         # https://en.wikipedia.org/wiki/Specific_orbital_energy
         """
         Calculates the Orbital Eccentricity of two bodys
@@ -390,22 +411,67 @@ class Astronomy:
         :param v:  Orbital Speed
         :return:
         """
-        return math.sqrt(
-            1 + (
-                2 * Phys.calc_specific_orbital_energy(m1, m2, r, v) *
-                (Phys.calc_angular_momentum_c(m1, Astronomy.calc_orb_period_circle(m1, m2, r), r) / Phys.reduced_mass(m1, m2)) ** 2 \
-                /
-                Phys.standard_grav_parameter(m1, m2) ** 2
+        try:
+            return math.sqrt(
+                1 + (
+                    2 * Phys.calc_specific_orbital_energy(m1, m2, r, v) *
+                    (Phys.calc_angular_momentum_c(m1, Astronomy.calc_orb_period_circle(m1, m2, r), r) / Phys.reduced_mass(m1, m2)) ** 2
+                    /
+                    (Phys.standard_grav_parameter(m1, m2)) ** 2
+                )
             )
-        )
+        except ValueError as e:
+            return -1
+            # print(e, "ABORTING...")
+            # print("ILLEGAL VALUE")
+            # print(
+            #     1 + (
+            #         2 * Phys.calc_specific_orbital_energy(m1, m2, r, v) *
+            #         (Phys.calc_angular_momentum_c(m1, Astronomy.calc_orb_period_circle(m1, m2, r), r) / Phys.reduced_mass(m1, m2)) ** 2
+            #         /
+            #         (Phys.standard_grav_parameter(m1, m2)) ** 2
+            #     )
+            # )
+            # exit(-1)
+
+    # @staticmethod
+    # def calc_semi_major_axis(m1: float, m2: float, pos: Vec2, vel: Vec2) -> float:
+    #     # https://physics.stackexchange.com/questions/295431/how-can-i-calculate-the-semi-major-axis-from-velocity-position-and-pull
+    #     return \
+    #             Phys.standard_grav_parameter(m1, m2) * pos.mag \
+    #             / \
+    #             2 * Phys.standard_grav_parameter(m1, m2) - pos.mag * (vel.dot(vel))
 
 
+    @staticmethod
+    def calc_semi_major_axis(m1: float, m2: float, r: float, v: float) -> float:
+        # https://space.stackexchange.com/a/1919
+
+        # Extra Cognition Needed
+        return - Phys.grav_potential_energy(m1, m2, r) / 2 * Phys.calc_specific_orbital_energy(m1, m2, r, v)
+
+
+
+
+
+class Orbit:
+
+    def __init__(self):
+        # https://en.wikipedia.org/wiki/Orbital_elements
+        self._eccentricity = 0
+        self._semiMajorAxis = 0
+        self._periapsis = 0
+        self._apoapsis = 0
+        #True Anomaly?
+
+    def anomaly(self):
+        pass
 
 
 
 class Entity(arcade.Sprite):
 
-    def __init__(self, mass: int, x: int, y: int, file: str, scale: float=1, *args, **kwargs):
+    def __init__(self, mass: int | float, x: int, y: int, file: str, scale: float=1, *args, **kwargs):
 
         super().__init__(filename=file, scale=scale, *args, **kwargs)
 
@@ -588,7 +654,7 @@ class Sim(arcade.Window):
             Entity(self.standard_mass // 2, 0, 0, "media/earthlike.png", ),
             Entity(-self.standard_mass, 0, 0, "media/red.png", ),
             #Entity(self.standard_mass * 5, 0, 0, "media/gas_giant_25.png", .4)
-            Entity(self.standard_mass * 500, 0, 0, "media/gas_giant_25.png", .4)
+            Entity(self.standard_mass * 500, 0, 0, "media/gas_giant_25.png", .4),
         ]
 
         #Mouse hover shadow
@@ -665,6 +731,14 @@ class Sim(arcade.Window):
                     #arcade.color.GREEN
                     (round(((obx % 5) / 5) * 255) * 10, 255, round(((obx % 3) / 3) * 255) )
                 )
+
+
+        # God Help Me
+        # if len(self.selected_object) == 2:
+        #     arcade.draw_ellipse_outline(
+        #         self.selected_object[0].center_x, self.selected_object[0].center_y,
+        #
+        #     )
 
 
         if len(self.selected_object) > 1:
@@ -782,8 +856,20 @@ class Sim(arcade.Window):
 
         if self.selected_object:
 
+            #TODO
+            # CLEAN UP THIS MESS. HOLY SHIT.
             systemtext = ""
             if len(self.selected_object) > 1:
+
+                needed_transverse_speed = round(Phys.calc_orbit_speed_circular(self.selected_object[0].mass, self.selected_object[1].mass,
+                          arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])), 2)
+
+                orbiting = (needed_transverse_speed * .9 <= round(self.selected_object[1].vel.mag) <= needed_transverse_speed * 1.1)
+                # https://physics.stackexchange.com/a/546233
+                # TODO
+                #  CLEAN UP THIS CODE,
+                #  MOVE THIS TEXT GENERATION OR ATLEAST THE PARAMETER GENERATION TO A SEPARATE METHOD!!!
+
 
                 systemtext = f"""
 {' - '.join(map(lambda x: x.name, self.selected_object))} System:
@@ -793,8 +879,15 @@ Gravitational Potential Energy: {
                                                  arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])) / 10 ** 12 * self.obj_scale, 2):,} TJ
 Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_object[1].mass) / 10 ** 12:,} TU
 Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
-Eccentricity: {Astronomy.calc_eccentricity(self.selected_object[0].mass, self.selected_object[1].mass, 
-                arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), self.selected_object[0].vel.mag)}
+Semi-Major Axis: {
+Astronomy.calc_semi_major_axis(self.selected_object[0].mass, self.selected_object[1].mass,
+            arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]),
+            self.selected_object[1].vel.mag)
+} KM (?)
+Needed Transverse Speed: {round(Phys.calc_orbit_speed_circular(self.selected_object[0].mass, self.selected_object[1].mass,
+                          arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])), 2)} M/S
+Speed of Object 2: {round(self.selected_object[1].vel.mag, 2)} M/S
+Orbiting?: {"Yes" if orbiting else "No"}
 """
 
             # Make mass readout in Kilo-Units, Round age?,
