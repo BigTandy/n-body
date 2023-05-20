@@ -1025,21 +1025,24 @@ Angular Momentum: {Phys.calc_angular_momentum(
 
 
 
-        elif (button == arcade.MOUSE_BUTTON_LEFT) and not self.place:
+         elif (button == arcade.MOUSE_BUTTON_LEFT) and not self.place:
             #Run selecting object code here
             clicked_object = arcade.get_sprites_at_point((x, y), self.objects)
 
             # Check to see if we actually clicked on an object: If yes make that the current object, if not, make None
             if clicked_object:
-                if modifiers != arcade.key.MOD_SHIFT:
+                if not modifiers & arcade.key.MOD_SHIFT:
+                    # https://api.arcade.academy/en/latest/keyboard.html#keyboard-modifiers
                     self.selected_object.clear()
                     self.selected_object.insert(0, clicked_object[-1])  #-1 to grab the top-most object
+                    print("MOD", modifiers, arcade.key.MOD_SHIFT)
                 else:
                     if clicked_object[-1] not in self.selected_object:
                         self.selected_object.append(clicked_object[-1])
             else:
                 self.selected_object.clear()
             #print(self.selected_object)
+
 
 
 
