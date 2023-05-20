@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import typing
+
 import arcade
 import arcade.gui
 try:
@@ -40,6 +43,8 @@ TITLE = "GRAV"
 #   Look into using GPU for Physical calculations
 #   Inelastic Collisions and Heat lost / Energy; Want to conserve energy in system, Heat or something
 #   Show total energy in system
+
+
 
 
 
@@ -186,8 +191,9 @@ Vector <{self.x}, {self.y}>
 
 
 
+from typing import NewType
 
-
+Scalar = int | float
 
 
 class Phys:
@@ -223,21 +229,21 @@ class Phys:
 
 
     @staticmethod
-    def law_second(mass: int, accel: Vec2) -> Vec2:
+    def law_second(mass: Scalar, accel: Vec2) -> Vec2:
         return mass * accel
 
 
     @staticmethod
-    def law_accl_from_force(mass: int, force: Vec2) -> Vec2:
+    def law_accl_from_force(mass: Scalar, force: Vec2) -> Vec2:
         return force / mass
 
 
     @staticmethod
-    def calc_momentum(mass: int | float, vel: Vec2) -> Vec2:
+    def calc_momentum(mass: Scalar, vel: Vec2) -> Vec2:
         return mass * vel
 
     @staticmethod
-    def elastic_collision(m1: int, m2: int, vel1: Vec2, vel2: Vec2) -> tuple[Vec2, Vec2]:
+    def elastic_collision(m1: Scalar, m2: Scalar, vel1: Vec2, vel2: Vec2) -> tuple[Vec2, Vec2]:
         """
         Calculates the elastic collision of two entitys and returns the result in a tuple;
         First value is self's new velocity, second is the affected ent
@@ -267,7 +273,7 @@ class Phys:
 
 
     @staticmethod
-    def inelastic_collision(C: float, m1: int, m2: int, vel1: Vec2, vel2: Vec2) -> tuple[Vec2, Vec2]:
+    def inelastic_collision(C: Scalar, m1: Scalar, m2: Scalar, vel1: Vec2, vel2: Vec2) -> tuple[Vec2, Vec2]:
         """
         Calculates the inelastic collision of two entitys and returns the result in a tuple;
         First value is self's new velocity, second is the affected ent
@@ -300,7 +306,7 @@ class Phys:
 
 
     @staticmethod
-    def calc_orbit_speed_circular(m1: int, m2: int, r: float) -> float:
+    def calc_orbit_speed_circular(m1: Scalar, m2: Scalar, r: Scalar) -> Scalar:
         """Circular Orbit Speed Calculation"""
         # FIXME POTENTIALLY WRONG
         return math.sqrt(
@@ -310,23 +316,13 @@ class Phys:
 
 
     @staticmethod
-    def calc_orbit_speed_elip(m1: int | float, m2: int | float, r: int | float, semi_major_axis: int | float) -> float:
-        """Eliptical Orbit Speed Calculation"""
-        # Is this finished???
-        #FIXME
-        return math.sqrt(
-            (G * (m1 + m2))
-        )
-
-
-    @staticmethod
-    def grav_potential_energy(m1: int | float, m2: int | float, dist: int | float):
+    def grav_potential_energy(m1: Scalar, m2: Scalar, dist: Scalar) -> Scalar:
         # https://en.wikipedia.org/wiki/Potential_energy#Potential_energy_for_gravitational_forces_between_two_bodies
         return - (G * m1 * m2) / dist
 
 
     @staticmethod
-    def reduced_mass(m1: int | float, m2: int | float) -> int | float:
+    def reduced_mass(m1: Scalar, m2: Scalar) -> Scalar:
         # https://en.wikipedia.org/wiki/Reduced_mass
         return m1 * m2 / m1 + m2
 
@@ -339,20 +335,21 @@ class Phys:
 
 
     @staticmethod
-    def calc_angular_momentum_c(m: int | float, f: int | float, r: int | float) -> int | float:
+    def calc_angular_momentum(m: Scalar, p: Vec2, v: Vec2) -> Vec2:
         """
 
         :param m: Mass of orbiting Body
-        :param f: Orbital Period
-        :param r: Orbital Radius
+        :param p: Postion Vector
+        :param v: Velocity Vector
         :return:
         """
         # https://en.wikipedia.org/wiki/Angular_momentum#Examples
-        return 2 * math.pi * m * f * r ** 2
+        # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
+        return m * p * v
 
 
     @staticmethod
-    def calc_specific_orbital_energy(m1: float, m2: float, r: float, v: float) -> float:
+    def calc_specific_orbital_energy(m1: Scalar, m2: Scalar, r: Scalar, v: Scalar) -> Scalar:
         # https://en.wikipedia.org/wiki/Specific_orbital_energy
         # https://space.stackexchange.com/questions/1904/how-to-programmatically-calculate-orbital-elements-using-position-velocity-vecto
         """
@@ -393,7 +390,7 @@ class Astronomy:
     # https://en.wikipedia.org/wiki/Electrodynamic_tether , not related, just really cool
 
     @staticmethod
-    def calc_orb_period_circle(m1: int | float, m2: int | float, rad: int | float) -> float:
+    def calc_orb_period_circle(m1: Scalar, m2: Scalar, rad: Scalar) -> Scalar:
         # https://en.wikipedia.org/wiki/Circular_orbit#Angular_speed_and_orbital_period
         return 2 * math.pi * math.sqrt(
             rad ** 3 / Phys.standard_grav_parameter(m1, m2)
@@ -401,54 +398,58 @@ class Astronomy:
 
 
     @staticmethod
-    def calc_eccentricity(m1: float, m2: float, r: float, v: float,) -> float:
-        # https://en.wikipedia.org/wiki/Specific_orbital_energy
+    def calc_mech_energy(m1: Scalar, m2: Scalar, r: Scalar, v: Vec2) -> Scalar:
+        # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
         """
-        Calculates the Orbital Eccentricity of two bodys
-        :param m1: Mass of Orbiting Body
+
+        :param m1: Mass of Satellite
         :param m2: Mass of Parent Body
         :param r:  Distance
-        :param v:  Orbital Speed
+        :param v:  Velocity Vector of Satellite
         :return:
         """
-        try:
-            return math.sqrt(
-                1 + (
-                    2 * Phys.calc_specific_orbital_energy(m1, m2, r, v) *
-                    (Phys.calc_angular_momentum_c(m1, Astronomy.calc_orb_period_circle(m1, m2, r), r) / Phys.reduced_mass(m1, m2)) ** 2
-                    /
-                    (Phys.standard_grav_parameter(m1, m2)) ** 2
-                )
-            )
-        except ValueError as e:
-            return -1
-            # print(e, "ABORTING...")
-            # print("ILLEGAL VALUE")
-            # print(
-            #     1 + (
-            #         2 * Phys.calc_specific_orbital_energy(m1, m2, r, v) *
-            #         (Phys.calc_angular_momentum_c(m1, Astronomy.calc_orb_period_circle(m1, m2, r), r) / Phys.reduced_mass(m1, m2)) ** 2
-            #         /
-            #         (Phys.standard_grav_parameter(m1, m2)) ** 2
-            #     )
-            # )
-            # exit(-1)
-
-    # @staticmethod
-    # def calc_semi_major_axis(m1: float, m2: float, pos: Vec2, vel: Vec2) -> float:
-    #     # https://physics.stackexchange.com/questions/295431/how-can-i-calculate-the-semi-major-axis-from-velocity-position-and-pull
-    #     return \
-    #             Phys.standard_grav_parameter(m1, m2) * pos.mag \
-    #             / \
-    #             2 * Phys.standard_grav_parameter(m1, m2) - pos.mag * (vel.dot(vel))
+        first_part = (1/2) * m1 * (v.mag ** 2) #Is 'v' the dot product of itself?
+        second_part = (G * (m2 + m1) * m1) / r
+        return first_part - second_part
 
 
     @staticmethod
-    def calc_semi_major_axis(m1: float, m2: float, r: float, v: float) -> float:
-        # https://space.stackexchange.com/a/1919
+    def calc_eccentricity(m1: Scalar, m2: Scalar, r: Scalar, p: Vec2, v: Vec2) -> Scalar:
+        # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
+        """
 
-        # Extra Cognition Needed
-        return - Phys.grav_potential_energy(m1, m2, r) / 2 * Phys.calc_specific_orbital_energy(m1, m2, r, v)
+        :param m1: Mass of Satellite
+        :param m2: Mass of Parent Body
+        :param r:  Distance between them
+        :param p:  Position of Satellite
+        :param v:  Velocity of Satellite
+        :return:
+        """
+
+        # (Phys.calc_angular_momentum(m1, p, v).dot(Phys.calc_angular_momentum(m1, p, v)))
+        first_part = 1 + (2 * Astronomy.calc_mech_energy(m1, m2, r, v) * (Phys.calc_angular_momentum(m1, p, v).mag ** 2)
+                          /
+                          G ** 2 * (m2 + m1) ** 2 * m1 ** 3
+                          )
+        try:
+            return math.sqrt(first_part)
+        except ValueError as e:
+            print(e)
+            print(f"Offending Value: {first_part}")
+            print("ABORTING...")
+            exit(-1)
+
+
+    @staticmethod
+    def calc_element_p(m1: Scalar, m2: Scalar, p: Vec2, v: Vec2) -> Scalar:
+        # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
+        """"""
+        a_momentum = Phys.calc_angular_momentum(m1, p, v)
+        return a_momentum.dot(a_momentum) / G * (m2 + m1) * m1 ** 2
+
+
+
+
 
 
 
@@ -532,7 +533,7 @@ class Entity(arcade.Sprite):
         for ent in sim.objects:
             if ent == self:
                 continue
-            mainforce += Phys.law_grav_vec_ent(self, ent, soft) * sim.obj_scale  #FIXME, Scale correct?
+            mainforce += Phys.law_grav_vec_ent(self, ent, soft) * sim.obj_scale
 
         return mainforce
 
@@ -596,6 +597,7 @@ class Entity(arcade.Sprite):
         #self.info_text.y = (self.center_y + (self.width // 4)) * math.sin(math.radians(45))
         self.info_text.x = (self.center_x + (self.width // 4))# * math.cos(math.radians(45))
         self.info_text.y = (self.center_y + (self.width // 4))# * math.sin(math.radians(45))
+
 
 
 
@@ -722,6 +724,21 @@ class Sim(arcade.Window):
                     arcade.color.WHITE, 2
                 )
 
+            for obj in self.selected_object:
+                force = obj.getForce(50)
+
+                arcade.draw_line(
+                    obj.center_x, obj.center_y,
+                    obj.center_x + force.x, obj.center_y + force.y,
+                    arcade.color.RED
+                )
+
+                arcade.draw_parabola_outline(
+                    obj.center_x, obj.center_y,
+                    obj.center_x + obj.vel.x + force.x, force.y + obj.vel.y,
+                    arcade.color.BLUE
+                )
+
 
         if self.selected_object:
             for obx, obj in enumerate(self.selected_object):
@@ -739,6 +756,11 @@ class Sim(arcade.Window):
         #         self.selected_object[0].center_x, self.selected_object[0].center_y,
         #
         #     )
+
+
+
+
+
 
 
         if len(self.selected_object) > 1:
@@ -879,15 +901,12 @@ Gravitational Potential Energy: {
                                                  arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])) / 10 ** 12 * self.obj_scale, 2):,} TJ
 Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_object[1].mass) / 10 ** 12:,} TU
 Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
-Semi-Major Axis: {
-Astronomy.calc_semi_major_axis(self.selected_object[0].mass, self.selected_object[1].mass,
-            arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]),
-            self.selected_object[1].vel.mag)
-} KM (?)
-Needed Transverse Speed: {round(Phys.calc_orbit_speed_circular(self.selected_object[0].mass, self.selected_object[1].mass,
-                          arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])), 2)} M/S
-Speed of Object 2: {round(self.selected_object[1].vel.mag, 2)} M/S
-Orbiting?: {"Yes" if orbiting else "No"}
+Mech Energy: {
+round(Astronomy.calc_mech_energy(self.selected_object[1].mass, self.selected_object[0].mass,
+arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]),
+                           self.selected_object[1].vel) / 10 ** 12, 2):,} TJ
+Angular Momentum: {round(
+Phys.calc_angular_momentum(self.selected_object[1].mass, self.selected_object[1].pos, self.selected_object[1].vel).mag / 10 ** 12, 2):,}
 """
 
             # Make mass readout in Kilo-Units, Round age?,
@@ -898,6 +917,8 @@ X, Y: {round(self.selected_object[0].center_x, 2)}, {round(self.selected_object[
 Age:  {round(self.selected_object[0].age, 2)}
 Velocity: {round(self.selected_object[0].vel.x, 1), round(self.selected_object[0].vel.y, 1)}
 Speed: {round(self.selected_object[0].vel.mag)}
+Angular Momentum: {Phys.calc_angular_momentum(
+                self.selected_object[0].mass, self.selected_object[0].pos, self.selected_object[0].vel)}
 """
 
 
@@ -1062,6 +1083,12 @@ Speed: {round(self.selected_object[0].vel.mag)}
         )
 
     def on_key_press(self, symbol: int, modifiers: int):
+
+        if symbol == arcade.key.U:
+            if modifiers == arcade.key.MOD_SHIFT:
+                self.obj_scale = .5
+            else:
+                self.obj_scale = 1
 
         if (symbol == arcade.key.I) and (self.selected_object):
             for _ in self.selected_object:
