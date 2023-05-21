@@ -54,7 +54,7 @@ Scalar = int | float
 
 class Vec2:
 
-    def __init__(self, x: Scalar = 0, y: Scalar = 0):
+    def __init__(self, x: Scalar = 0, y: Scalar = 0, polar: bool = False):
         """
         2d Vector Type
         :param x:
@@ -62,18 +62,26 @@ class Vec2:
         """
         assert x is not None, ValueError(f"Vector 'x' cannot be None")
         assert y is not None, ValueError(f"Vector 'y' cannot be None")
-        self._x = x
-        self._y = y
+        self._x = x  # R when set to polar
+        self._y = y  # Theta when set to polar
+        self._polar = polar  # Are we using this vector to represent polar co-ordents?
         #print(self)
 
 
     @property
     def x(self):
-        return self._x
+        if not self._polar:
+            return self._x
+        else:
+            return self._x * math.cos(math.radians(self._y))
+
 
     @property
     def y(self):
-        return self._y
+        if not self._polar:
+            return self._y
+        else:
+            return self._x * math.sin(math.radians(self._y))
 
 
     def __getitem__(self, item: int):
@@ -155,12 +163,17 @@ class Vec2:
         if not isinstance(other, (Vec2)):
             raise NotImplementedError(f"Unsupported operand type(s) for 'cross': 'Vector' and '{type(other)}'")
 
-        return ((self / self.mag) + (other / other.mag)) * ((self.mag + other.mag) / 2)
+        try:
+            return ((self / self.mag) + (other / other.mag)) * ((self.mag + other.mag) / 2)
+        except ZeroDivisionError:
+            #Don't know if I should return (Empty Vec2) when either mag is 0, but rather not have the program crash
+            return Vec2()
 
 
 
     def angle_between(self, other: Vec2) -> Scalar:
         """Return the angle between two vectors in radians"""
+        # TODO, DO THIS IN POLAR SPACE?
         #FIXME
         if not isinstance(other, (Vec2)):
             raise NotImplementedError(f"Unsupported operand type(s) for 'angle_between': 'Vector' and '{type(other)}'")
@@ -172,12 +185,18 @@ class Vec2:
 
     @property
     def mag(self) -> Scalar:
-        return math.sqrt(self.x**2 + self.y**2)
+        if not self._polar:
+            return math.sqrt(self.x**2 + self.y**2)
+        else:
+            return self._x
 
 
     @property
     def heading(self) -> Scalar:
-        return math.atan2(self.y, self.x)
+        if not self._polar:
+            return math.atan2(self.y, self.x)
+        else:
+            return self._y
 
 
     def __neg__(self) -> Vec2:
@@ -211,8 +230,40 @@ class Vec2:
 
     def __str__(self):
         return f"""
-Vector <{self.x}, {self.y}>
+Vector <{self._x}, {self._y}>
 """
+
+
+
+
+class MathUtil:
+
+    @staticmethod
+    def cartesian_to_polar(x: Scalar, y: Scalar) -> tuple[Scalar, Scalar]:
+        # https://www.varsitytutors.com/hotmath/hotmath_help/topics/polar-coordinates
+        """
+        Converts X, Y in cartesian plane to polar co-ords, returns theta in degrees, returns (r, theta)
+        :param x: X
+        :param y: Y
+        :return: (R, θ)
+        """
+        r = math.sqrt(x ** 2 + y ** 2)
+        theta = math.degrees(math.atan(y / x))
+        return r, theta
+
+
+    @staticmethod
+    def polar_to_cartesian(r: Scalar, theta: Scalar) -> tuple[Scalar, Scalar]:
+        """
+        Converts polar R, θ to X, Y cartesian;
+        :param r: R
+        :param theta: θ, In Degrees
+        :return: (X, Y)
+        """
+        x = r * math.cos(math.radians(theta))
+        y = r * math.sin(math.radians(theta))
+        return x, y
+
 
 
 
@@ -338,6 +389,7 @@ class Phys:
     @staticmethod
     def grav_potential_energy(m1: Scalar, m2: Scalar, dist: Scalar) -> Scalar:
         # https://en.wikipedia.org/wiki/Potential_energy#Potential_energy_for_gravitational_forces_between_two_bodies
+        # Probably Wrong Tbh
         return - (G * m1 * m2) / dist
 
 
@@ -370,19 +422,21 @@ class Phys:
 
 
     @staticmethod
-    def calc_specific_orbital_energy(m1: Scalar, m2: Scalar, r: Scalar, v: Scalar) -> Scalar:
+    def calc_specific_orbital_energy(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2) -> Scalar:
         # https://en.wikipedia.org/wiki/Specific_orbital_energy
         # https://space.stackexchange.com/questions/1904/how-to-programmatically-calculate-orbital-elements-using-position-velocity-vecto
+
+        # https://space.stackexchange.com/questions/57909/how-can-i-find-the-x-y-position-of-apogee-and-perigee-if-i-only-have-the-value
         """
 
         :param m1: Mass of object 1
         :param m2: Mass of object 2
-        :param r:  Distance between objects
-        :param v:  Relative Orbital Speed
+        :param r:  Radial Distance Vector, using a relative polar vector
+        :param v:  Velocity Vector
         :return:
         """
 
-        return (v ** 2 / 2) - (Phys.standard_grav_parameter(m1, m2) / r)
+        return (v.mag ** 2 / 2) - (Phys.standard_grav_parameter(m1, m2) / r.mag)
 
 
 
@@ -469,10 +523,12 @@ class Entity(arcade.Sprite):
 
         #Have extra properties
 
-        self.closest = [None, None]
+        self.closest: list[Entity | None, int] = [None, 0]
 
         self.past_positions: list[tuple[float, float]] = []
         self.trail_color = (rand.randint(0, 255), rand.randint(0, 255), rand.randint(0, 255), rand.randint(150, 255),)
+
+        self.static = False
 
 
 
@@ -528,6 +584,10 @@ class Entity(arcade.Sprite):
         #     self.past_positions.clear()
 
 
+        self.info_text.x = (self.center_x + (self.width // 4))# * math.cos(math.radians(45))
+        self.info_text.y = (self.center_y + (self.width // 4))# * math.sin(math.radians(45))
+
+        self.age += delta_time
 
 
         collide = self.collides_with_list(sim.objects)
@@ -565,6 +625,14 @@ class Entity(arcade.Sprite):
 
 
 
+        if self.static:
+            self.info_text.color = arcade.color.DARK_RED
+            #self.vel = Vec2()
+            return
+        else:
+            self.info_text.color = arcade.color.WHITE
+            # Probably could write this in a far better way, running on > 5 hours sleep... will do later
+
 
         # Soft=10 is ok
         # Soft=20 is better
@@ -575,13 +643,16 @@ class Entity(arcade.Sprite):
         self.vel += Phys.law_accl_from_force(self.mass, force) * delta_time
         self.pos += self.vel * delta_time
 
-        self.age += delta_time
 
-        #Update Flavor? Text POS
-        #self.info_text.x = (self.center_x + (self.width // 4)) * math.cos(math.radians(45))
-        #self.info_text.y = (self.center_y + (self.width // 4)) * math.sin(math.radians(45))
-        self.info_text.x = (self.center_x + (self.width // 4))# * math.cos(math.radians(45))
-        self.info_text.y = (self.center_y + (self.width // 4))# * math.sin(math.radians(45))
+
+    def __str__(self):
+        return f"{self.name} {self.mass / 10 ** 24} TKG, ({self.pos.x}, {self.pos.y})"
+
+
+
+
+
+
 
 
 
@@ -647,6 +718,7 @@ class Sim(arcade.Window):
 
         self.bodys = [
             Entity(self.standard_mass // 2, 0, 0, "media/earthlike.png", ),
+            Entity(self.standard_mass, 0, 0, "media/earthlike.png", 2),
             Entity(-self.standard_mass, 0, 0, "media/red.png", ),
             #Entity(self.standard_mass * 5, 0, 0, "media/gas_giant_25.png", .4)
             Entity(self.standard_mass * 500, 0, 0, "media/gas_giant_25.png", .4),
@@ -923,6 +995,12 @@ class Sim(arcade.Window):
                 #  MOVE THIS TEXT GENERATION OR ATLEAST THE PARAMETER GENERATION TO A SEPARATE METHOD!!!
 
 
+                polar_co_ords = MathUtil.cartesian_to_polar(
+                    self.selected_object[1].pos.x - self.selected_object[0].pos.x,
+                    self.selected_object[1].pos.y - self.selected_object[0].pos.y,
+                )
+                polar_co_ords_vec2 = Vec2(polar_co_ords[0], polar_co_ords[1], True)
+
                 systemtext = f"""
 {' - '.join(map(lambda x: x.name, self.selected_object))} System:
 Total Mass: {sum(map(lambda x: x.mass, self.selected_object)) / 10 ** 12:,} TU
@@ -933,7 +1011,11 @@ Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_obj
 Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
 Angular Momentum: {round(
 Phys.calc_angular_momentum(self.selected_object[1].mass, self.selected_object[1].pos, self.selected_object[1].vel).mag / 10 ** 12, 2):,}
+Radial Distance Vector: {
+polar_co_ords_vec2
+}
 """
+
 
             # Make mass readout in Kilo-Units, Round age?,
             individual_text = f"""
@@ -1021,7 +1103,7 @@ Speed: {round(self.selected_object[0].vel.mag)}
                 speed_needed = Phys.calc_orbit_speed_circular(
                     selObj.mass, curObj.mass,
                     dist
-                )
+                ) * self.obj_scale
 
                 angle = math.atan2(selObj.pos.y - curObj.pos.y, selObj.pos.x - curObj.pos.x)
 
@@ -1135,6 +1217,21 @@ Speed: {round(self.selected_object[0].vel.mag)}
         elif (symbol == arcade.key.P) and (modifiers == arcade.key.MOD_SHIFT):
             for obj in self.objects:
                 obj.scale = 1
+
+
+
+        if symbol == arcade.key.Z:
+            for obj in self.selected_object:
+                obj.static = not obj.static
+
+        if symbol == arcade.key.C:
+            if not modifiers & arcade.key.MOD_SHIFT:
+                for obj in self.selected_object:
+                    obj.past_positions.clear()
+            else:
+                for obj in self.objects:
+                    obj.past_positions.clear()
+
 
 
         #Move Cam
