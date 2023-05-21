@@ -49,12 +49,14 @@ TITLE = "GRAV"
 
 
 
+Scalar = int | float
+
+
 class Vec2:
 
-    def __init__(self, x: float, y: float):
+    def __init__(self, x: Scalar = 0, y: Scalar = 0):
         """
-        Vector type
-        direction is in degrees
+        2d Vector Type
         :param x:
         :param y:
         """
@@ -127,7 +129,7 @@ class Vec2:
         # return init
 
 
-    def dot(self, other: Vec2) -> float:
+    def dot(self, other: Vec2) -> Scalar:
         if not isinstance(other, (Vec2)):
             raise NotImplementedError(f"Unsupported operand type(s) for 'dot': 'Vector' and '{type(other)}'")
 
@@ -136,22 +138,45 @@ class Vec2:
         return out
 
 
-    def angle_between(self, other: Vec2) -> float:
+    def cross_faux3d(self, other: Vec2) -> Scalar:
+        # https://en.wikipedia.org/wiki/Cross_product#Alternative_ways_to_compute
+        # https://stackoverflow.com/questions/243945/calculating-a-2d-vectors-cross-product
+        # https://www.nagwa.com/en/explainers/175169159270/
+        if not isinstance(other, (Vec2)):
+            raise NotImplementedError(f"Unsupported operand type(s) for 'cross': 'Vector' and '{type(other)}'")
+
+        return (self.x * other.y) - (self.y * other.x)
+
+
+
+    def cross_faux2d(self, other: Vec2) -> Vec2:
+        # My own algorithm, taken from its use in `on_draw` in Sim,
+        # Have no idea if it is correct or not, and dont have enough of a math background to know, but seems to do the correctish thing
+        if not isinstance(other, (Vec2)):
+            raise NotImplementedError(f"Unsupported operand type(s) for 'cross': 'Vector' and '{type(other)}'")
+
+        return ((self / self.mag) + (other / other.mag)) * ((self.mag + other.mag) / 2)
+
+
+
+    def angle_between(self, other: Vec2) -> Scalar:
         """Return the angle between two vectors in radians"""
+        #FIXME
         if not isinstance(other, (Vec2)):
             raise NotImplementedError(f"Unsupported operand type(s) for 'angle_between': 'Vector' and '{type(other)}'")
 
         dot = self.dot(other)
-        return math.acos(dot / self.mag * other.mag)
+        print("A_B_V", dot / self.mag * other.mag, math.radians(dot / self.mag * other.mag))
+        return math.acos(math.radians(dot / self.mag * other.mag))
 
 
     @property
-    def mag(self) -> float | int:
+    def mag(self) -> Scalar:
         return math.sqrt(self.x**2 + self.y**2)
 
 
     @property
-    def heading(self) -> float | int:
+    def heading(self) -> Scalar:
         return math.atan2(self.y, self.x)
 
 
@@ -159,8 +184,8 @@ class Vec2:
         return Vec2(-self.x, -self.y)
 
 
-    def __truediv__(self, other: int | float) -> Vec2:
-        if not isinstance(other, (int, float)):
+    def __truediv__(self, other: Scalar) -> Vec2:
+        if not isinstance(other, (Scalar)):
             raise NotImplementedError(f"Unsupported operand type(s) for /: 'Vector' and '{type(other)}'")
 
         return Vec2(self.x / other, self.y / other)
@@ -189,11 +214,6 @@ class Vec2:
 Vector <{self.x}, {self.y}>
 """
 
-
-
-from typing import NewType
-
-Scalar = int | float
 
 
 class Phys:
@@ -339,13 +359,14 @@ class Phys:
         """
 
         :param m: Mass of orbiting Body
-        :param p: Postion Vector
+        :param p: Position Vector
         :param v: Velocity Vector
         :return:
         """
         # https://en.wikipedia.org/wiki/Angular_momentum#Examples
         # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
-        return m * p * v
+        #return m * p * v
+        return m * (p.cross_faux2d(v))
 
 
     @staticmethod
@@ -395,57 +416,6 @@ class Astronomy:
         return 2 * math.pi * math.sqrt(
             rad ** 3 / Phys.standard_grav_parameter(m1, m2)
         )
-
-
-    @staticmethod
-    def calc_mech_energy(m1: Scalar, m2: Scalar, r: Scalar, v: Vec2) -> Scalar:
-        # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
-        """
-
-        :param m1: Mass of Satellite
-        :param m2: Mass of Parent Body
-        :param r:  Distance
-        :param v:  Velocity Vector of Satellite
-        :return:
-        """
-        first_part = (1/2) * m1 * (v.mag ** 2) #Is 'v' the dot product of itself?
-        second_part = (G * (m2 + m1) * m1) / r
-        return first_part - second_part
-
-
-    @staticmethod
-    def calc_eccentricity(m1: Scalar, m2: Scalar, r: Scalar, p: Vec2, v: Vec2) -> Scalar:
-        # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
-        """
-
-        :param m1: Mass of Satellite
-        :param m2: Mass of Parent Body
-        :param r:  Distance between them
-        :param p:  Position of Satellite
-        :param v:  Velocity of Satellite
-        :return:
-        """
-
-        # (Phys.calc_angular_momentum(m1, p, v).dot(Phys.calc_angular_momentum(m1, p, v)))
-        first_part = 1 + (2 * Astronomy.calc_mech_energy(m1, m2, r, v) * (Phys.calc_angular_momentum(m1, p, v).mag ** 2)
-                          /
-                          G ** 2 * (m2 + m1) ** 2 * m1 ** 3
-                          )
-        try:
-            return math.sqrt(first_part)
-        except ValueError as e:
-            print(e)
-            print(f"Offending Value: {first_part}")
-            print("ABORTING...")
-            exit(-1)
-
-
-    @staticmethod
-    def calc_element_p(m1: Scalar, m2: Scalar, p: Vec2, v: Vec2) -> Scalar:
-        # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
-        """"""
-        a_momentum = Phys.calc_angular_momentum(m1, p, v)
-        return a_momentum.dot(a_momentum) / G * (m2 + m1) * m1 ** 2
 
 
 
@@ -501,6 +471,9 @@ class Entity(arcade.Sprite):
 
         self.closest = [None, None]
 
+        self.past_positions: list[tuple[float, float]] = []
+        self.trail_color = (rand.randint(0, 255), rand.randint(0, 255), rand.randint(0, 255), rand.randint(150, 255),)
+
 
 
 
@@ -545,6 +518,17 @@ class Entity(arcade.Sprite):
 
         # https://www.cs.princeton.edu/courses/archive/spr01/cs126/assignments/nbody.html
 
+        self.past_positions.append((self.pos.x, self.pos.y))
+        # Prevents list from getting too long
+        # if len(self.past_positions) > 300:
+        #     self.past_positions.pop(0)
+
+        # if self.age % 60 < .5:
+        #     #auto clear path list, as to prevent clutter and slowdown
+        #     self.past_positions.clear()
+
+
+
 
         collide = self.collides_with_list(sim.objects)
         if len(collide) > 0:
@@ -585,7 +569,8 @@ class Entity(arcade.Sprite):
         # Soft=10 is ok
         # Soft=20 is better
         # Soft=100 is even better?
-        force = self.getForce(50)
+        #force = self.getForce(50)
+        force = self.getForce(5)
 
         self.vel += Phys.law_accl_from_force(self.mass, force) * delta_time
         self.pos += self.vel * delta_time
@@ -606,6 +591,14 @@ class Entity(arcade.Sprite):
 
 from pyglet.math import Vec2 as PVec2
 from typing import NewType
+
+
+
+#TODO READ THIS
+#   https://forum.kerbalspaceprogram.com/index.php?/topic/161861-orbital-calculation-headaches/
+#   KSP FOURMS COMING IN CLUTCH
+
+
 
 class Sim(arcade.Window):
 
@@ -670,7 +663,10 @@ class Sim(arcade.Window):
         self.current_body = 0
 
 
-        self.draw_vecs = False
+        self.draw_vecs = {
+            "v": False,
+            "t": False,
+        }
 
 
         self.selected_object: list[Entity | arcade.Sprite] = []
@@ -716,7 +712,7 @@ class Sim(arcade.Window):
 
         self.center_mass.draw()
 
-        if self.draw_vecs:
+        if self.draw_vecs['v']:
             for obj in self.objects:
                 arcade.draw_line(
                     obj.center_x, obj.center_y,
@@ -724,8 +720,13 @@ class Sim(arcade.Window):
                     arcade.color.WHITE, 2
                 )
 
-            for obj in self.selected_object:
+            for obx, obj in enumerate(self.selected_object):
                 force = obj.getForce(50)
+                try:
+                    #forward: Vec2 = ((force / force.mag) + (obj.vel / obj.vel.mag)) * ((force.mag + obj.vel.mag) / 2)
+                    forward: Vec2 = force.cross_faux2d(obj.vel)
+                except ZeroDivisionError:
+                    break
 
                 arcade.draw_line(
                     obj.center_x, obj.center_y,
@@ -733,11 +734,35 @@ class Sim(arcade.Window):
                     arcade.color.RED
                 )
 
-                arcade.draw_parabola_outline(
+                # arcade.draw_arc_outline(
+                #     obj.center_x, obj.center_y,
+                #     forward.x / 100, forward.y / 100,
+                #     arcade.color.BLUE,
+                #     forward.heading,
+                #     -forward.heading
+                # )
+
+                arcade.draw_line(
                     obj.center_x, obj.center_y,
-                    obj.center_x + obj.vel.x + force.x, force.y + obj.vel.y,
-                    arcade.color.BLUE
+                    obj.center_x + forward.x, obj.center_y + forward.y,
+                    arcade.color.AMARANTH_PURPLE
                 )
+
+
+
+        if self.draw_vecs['t']:
+            for obx, obj in enumerate(self.selected_object):
+                arcade.draw_points(
+                    obj.past_positions,
+                    # arcade.color.AZURE,
+                    #arcade.color.AZURE if obx == 0 else (50, 50, (obx / len(self.selected_object)) * 255)
+                    arcade.color.AZURE if obx == 0 else obj.trail_color
+                    # (0, 127 - (obx % 6), 255 - (obx % 9))
+                    # (round(((obx % 5) / 5) * 255) * 10, 255, round(((obx % 3) / 3) * 255))
+                )
+
+
+
 
 
         if self.selected_object:
@@ -746,8 +771,12 @@ class Sim(arcade.Window):
                     obj.center_x, obj.center_y,
                     (max(obj.width, obj.height) // 2),
                     #arcade.color.GREEN
-                    (round(((obx % 5) / 5) * 255) * 10, 255, round(((obx % 3) / 3) * 255) )
+                    #(round(((obx % 5) / 5) * 255) * 10, 255, round(((obx % 3) / 3) * 255) )
+                    # ((obx // len(self.selected_object)) * 255, 50, 100)
+                    arcade.color.GREEN if obx == 0 else obj.trail_color
                 )
+
+
 
 
         # God Help Me
@@ -812,6 +841,7 @@ class Sim(arcade.Window):
 
         if self.paused:
             self.paused_text.draw()
+
 
 
 
@@ -901,10 +931,6 @@ Gravitational Potential Energy: {
                                                  arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])) / 10 ** 12 * self.obj_scale, 2):,} TJ
 Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_object[1].mass) / 10 ** 12:,} TU
 Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
-Mech Energy: {
-round(Astronomy.calc_mech_energy(self.selected_object[1].mass, self.selected_object[0].mass,
-arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]),
-                           self.selected_object[1].vel) / 10 ** 12, 2):,} TJ
 Angular Momentum: {round(
 Phys.calc_angular_momentum(self.selected_object[1].mass, self.selected_object[1].pos, self.selected_object[1].vel).mag / 10 ** 12, 2):,}
 """
@@ -917,8 +943,6 @@ X, Y: {round(self.selected_object[0].center_x, 2)}, {round(self.selected_object[
 Age:  {round(self.selected_object[0].age, 2)}
 Velocity: {round(self.selected_object[0].vel.x, 1), round(self.selected_object[0].vel.y, 1)}
 Speed: {round(self.selected_object[0].vel.mag)}
-Angular Momentum: {Phys.calc_angular_momentum(
-                self.selected_object[0].mass, self.selected_object[0].pos, self.selected_object[0].vel)}
 """
 
 
@@ -1025,7 +1049,7 @@ Angular Momentum: {Phys.calc_angular_momentum(
 
 
 
-         elif (button == arcade.MOUSE_BUTTON_LEFT) and not self.place:
+        elif (button == arcade.MOUSE_BUTTON_LEFT) and not self.place:
             #Run selecting object code here
             clicked_object = arcade.get_sprites_at_point((x, y), self.objects)
 
@@ -1035,14 +1059,12 @@ Angular Momentum: {Phys.calc_angular_momentum(
                     # https://api.arcade.academy/en/latest/keyboard.html#keyboard-modifiers
                     self.selected_object.clear()
                     self.selected_object.insert(0, clicked_object[-1])  #-1 to grab the top-most object
-                    print("MOD", modifiers, arcade.key.MOD_SHIFT)
                 else:
                     if clicked_object[-1] not in self.selected_object:
                         self.selected_object.append(clicked_object[-1])
             else:
                 self.selected_object.clear()
             #print(self.selected_object)
-
 
 
 
@@ -1087,11 +1109,6 @@ Angular Momentum: {Phys.calc_angular_momentum(
 
     def on_key_press(self, symbol: int, modifiers: int):
 
-        if symbol == arcade.key.U:
-            if modifiers == arcade.key.MOD_SHIFT:
-                self.obj_scale = .5
-            else:
-                self.obj_scale = 1
 
         if (symbol == arcade.key.I) and (self.selected_object):
             for _ in self.selected_object:
@@ -1152,13 +1169,20 @@ Angular Momentum: {Phys.calc_angular_momentum(
 
         #Show Vectors
         if symbol == arcade.key.V:
-            self.draw_vecs = not self.draw_vecs
+            self.draw_vecs['v'] = not self.draw_vecs['v']
+
+        #Show Trails
+        if symbol == arcade.key.T:
+            self.draw_vecs['t'] = not self.draw_vecs['t']
 
 
         #Spawn random earthlikes
         if symbol == arcade.key.M:
             for _ in range(5):
-                self.objects.append(Entity(25_000_000_000_000_000, rand.randint(0, self.width), rand.randint(0, self.height), "media/earthlike.png"))
+                self.objects.append(Entity(25_000_000_000_000_000,
+                                           rand.randint(0, round(self.width + self.cam_sprites.position.x)),
+                                           rand.randint(0, round(self.height + self.cam_sprites.position.y)),
+                                           "media/earthlike.png", scale=self.obj_scale))
 
 
         #Stop all objects
