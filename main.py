@@ -13,7 +13,7 @@ else:
 
 import math
 import random as rand
-import statistics as stats
+from dataclasses import dataclass
 
 
 # Copyright (C) 2023 Bud P. L. Patterson
@@ -475,6 +475,40 @@ class Astronomy:
         "Jupiter"
     ]
 
+    roman_numerals = {
+        "tens": {
+            0: "",
+            1: "X",
+            2: "XX",
+            3: "XXX",
+            4: "XL",
+            5: "L",
+            6: "LX",
+            7: "LXX",
+            8: "LXXX",
+            9: "XC"
+        },
+        "ones": {
+            0: "",
+            1: "I",
+            2: "II",
+            3: "III",
+            4: "IV",
+            5: "V",
+            6: "VI",
+            7: "VII",
+            8: "VIII",
+            9: "IX"
+        }
+    }
+
+
+    @staticmethod
+    def hindu_to_roman(number: Scalar) -> str:
+        tens = math.floor(number / 10)
+        ones = number % 10
+        return Astronomy.roman_numerals["tens"][tens] + Astronomy.roman_numerals["ones"][ones]
+
 
     # https://space.stackexchange.com/questions/1904/how-to-programmatically-calculate-orbital-elements-using-position-velocity-vecto
 
@@ -511,8 +545,27 @@ class Astronomy:
         return 1 / (2 / r.mag - v.mag **2 / Phys.standard_grav_parameter(m1, m2))
 
 
+
     @staticmethod
-    def calc_eccentricity_vector(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2, d2: bool = False) -> Scalar:
+    def calc_semi_minor_axis(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2) -> Scalar:
+        # https://en.wikipedia.org/wiki/Semi-major_and_semi-minor_axes
+        """
+
+        :param m1: Mass of object 1
+        :param m2: Mass of object 2
+        :param r:  Radial Distance Vector, using a relative polar vector
+        :param v:  Velocity Vector
+        :return:
+        """
+
+        return Astronomy.calc_semi_major_axis(m1, m2, r, v) * math.sqrt(
+            1 - Astronomy.calc_eccentricity_vector(m1, m2, r, v) ** 2
+        )
+
+
+
+    @staticmethod
+    def calc_eccentricity_vector(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2) -> Scalar:
         # https://space.stackexchange.com/questions/57909/how-can-i-find-the-x-y-position-of-apogee-and-perigee-if-i-only-have-the-value
         # THANK YOU RANDOM INTERNET MATH STRANGERS, YOU ARE HEROS!!!
 
@@ -520,8 +573,14 @@ class Astronomy:
         # http://orbitsimulator.com/formulas/OrbitalElements.html ^
         # Actual God-send, would not be possibe without
         # Thank you, Tony Dunn
-        """"""
+        """
 
+        :param m1: Mass of Object 1
+        :param m2: Mass of Object 2
+        :param r:  Distance Vector, Relative
+        :param v:  Velocity Vector
+        :return:
+        """
 
         e = math.sqrt(1 - (
             r.cross_faux3d(v) ** 2 / Phys.standard_grav_parameter(m1, m2)
@@ -530,19 +589,47 @@ class Astronomy:
 
 
 
+    @staticmethod
+    def calc_apoaps_periaps(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2) -> tuple[Scalar, Scalar]:
+        #
+        """
+        Returns Apoapsis and Periapsis, (A, P)
+
+        :param m1: Mass of Object 1
+        :param m2: Mass of Object 2
+        :param r:  Distance Vector, Relative
+        :param v:  Velocity Vector
+        :return:
+        """
+        semi_major = Astronomy.calc_semi_major_axis(m1, m2, r, v)
+        ecc = Astronomy.calc_eccentricity_vector(m1, m2, r, v)
+
+        ae = semi_major * ecc
+        periapse = semi_major - ae
+        apoapse = semi_major + ae
+        return apoapse, periapse
+
+
+
 
 class Orbit:
 
     def __init__(self):
         # https://en.wikipedia.org/wiki/Orbital_elements
-        self._eccentricity = 0
-        self._semiMajorAxis = 0
-        self._periapsis = 0
-        self._apoapsis = 0
+        self.eccentricity = 0
+        self.semiMajorAxis = 0
+        self.semiMinorAxis = 0
+        self.periapsis = 0
+        self.apoapsis = 0
         #True Anomaly?
 
-    def anomaly(self):
-        pass
+
+    def clear(self):
+        self.eccentricity = 0
+        self.semiMajorAxis = 0
+        self.semiMinorAxis = 0
+        self.periapsis = 0
+        self.apoapsis = 0
 
 
 
@@ -554,12 +641,7 @@ class Entity(arcade.Sprite):
 
         #TODO, Determine Entity's orbital state, e.g. (Orbiting, SubOrbital?, "Static")
 
-        self.name = rand.choice(Astronomy.planet_names)
-        self.info_text = arcade.Text(
-            f"{self.name}",
-            (x + (self.width // 2)) * math.cos(math.radians(45)), (y + (self.width // 2)) * math.sin(math.radians(45)),
-            font_size=10, anchor_x="left")
-
+        self._name = rand.choice(Astronomy.planet_names)
 
         self.mass = mass
         self.file = file
@@ -582,7 +664,23 @@ class Entity(arcade.Sprite):
 
         self.static = False
 
+        self.parent: Entity | None = None
+        self.children = set()
+        self.orbit = Orbit()
 
+        self.info_text = arcade.Text(
+            f"{self.name}",
+            (x + (self.width // 2)) * math.cos(math.radians(45)), (y + (self.width // 2)) * math.sin(math.radians(45)),
+            font_size=10, anchor_x="left")
+
+
+    @property
+    def name(self):
+        if self.parent is None:
+            return self._name
+        else:
+            order = list(sorted(self.parent.children, key= lambda obj: obj.orbit.periapsis))
+            return f"{self.parent.name} {Astronomy.hindu_to_roman(order.index(self) + 1)}"
 
 
     @property
@@ -694,6 +792,51 @@ class Entity(arcade.Sprite):
 
         self.vel += Phys.law_accl_from_force(self.mass, force) * delta_time
         self.pos += self.vel * delta_time
+
+
+        # Determine if we're orbiting something
+        for obj in sim.objects:
+            if obj == self:
+                continue
+            obj: Entity
+
+
+            polar_co_ords = MathUtil.cartesian_to_polar(
+                self.pos.x - obj.pos.x,
+                self.pos.y - obj.pos.y,
+            )
+            r = Vec2(polar_co_ords[0], polar_co_ords[1], True)
+
+            apseas = Astronomy.calc_apoaps_periaps(
+                obj.mass, self.mass,
+                r, self.vel
+            )
+
+            self.orbit.apoapsis = apseas[0]
+            self.orbit.periapsis = apseas[1]
+
+            self.orbit.semiMajorAxis = Astronomy.calc_semi_major_axis(obj.mass, self.mass, r, self.vel)
+            self.orbit.semiMinorAxis = Astronomy.calc_semi_minor_axis(obj.mass, self.mass, r, self.vel)
+            self.orbit.eccentricity = Astronomy.calc_eccentricity_vector(obj.mass, self.mass, r, self.vel)
+
+
+
+            if (self.orbit.semiMajorAxis > 0) and (self.orbit.eccentricity <= .85):
+                # We are orbiting
+                self.parent = obj
+
+                if self not in self.parent.children:
+                    self.parent.children.add(self)
+
+                self.info_text.text = self.name  # Probably want to optimize this sometime,
+                # so we aren't always setting this, but that could be said about alot about everything to do with this
+
+                break
+        else:
+            if self.parent is not None:
+                self.parent.children.remove(self)
+            self.parent = None
+            self.orbit.clear()
 
 
 
@@ -891,6 +1034,7 @@ class Sim(arcade.Window):
 
         if self.selected_object:
             for obx, obj in enumerate(self.selected_object):
+                obj: Entity
                 arcade.draw_circle_outline(
                     obj.center_x, obj.center_y,
                     (max(obj.width, obj.height) // 2),
@@ -899,6 +1043,25 @@ class Sim(arcade.Window):
                     # ((obx // len(self.selected_object)) * 255, 50, 100)
                     arcade.color.GREEN if obx == 0 else obj.trail_color
                 )
+
+                # if obj.parent is not None:
+                #
+                #
+                #     # arcade.draw_circle_filled(
+                #     #     obj.orbit.apoapsis
+                #     # )
+                #
+                #     arcade.draw_ellipse_outline(
+                #         obj.parent.center_x + (((obj.orbit.apoapsis + obj.orbit.periapsis) / 2) - obj.distance(obj.parent)),
+                #         obj.parent.center_y + (((obj.orbit.apoapsis + obj.orbit.periapsis) / 2) - obj.distance(obj.parent)),
+                #         (obj.orbit.semiMajorAxis * 2),
+                #         (obj.orbit.semiMinorAxis * 2),
+                #         arcade.color.GOLD
+                #     )
+
+
+
+
 
 
 
@@ -1052,9 +1215,9 @@ class Sim(arcade.Window):
                     self.selected_object[1].pos.y - self.selected_object[0].pos.y,
                 )
                 polar_co_ords_vec2 = Vec2(polar_co_ords[0], polar_co_ords[1], True)
-                diff_co_vec2 = Vec2(
-                    self.selected_object[1].pos.x - self.selected_object[0].pos.x,
-                    self.selected_object[1].pos.y - self.selected_object[0].pos.y
+                apseas = Astronomy.calc_apoaps_periaps(
+                    self.selected_object[0].mass, self.selected_object[1].mass,
+                    polar_co_ords_vec2, self.selected_object[1].vel
                 )
 
                 systemtext = f"""
@@ -1065,24 +1228,36 @@ Gravitational Potential Energy: {
                                                  arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])) / 10 ** 12 * self.obj_scale, 2):,} TJ
 Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_object[1].mass) / 10 ** 12:,} TU
 Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
-SEMI-MAJOR-AXIS: {Astronomy.calc_semi_major_axis(
+SEMI-MAJOR-AXIS: {round(Astronomy.calc_semi_major_axis(
 self.selected_object[1].mass, self.selected_object[0].mass, polar_co_ords_vec2, self.selected_object[1].vel
-):,}
+), 2):,}
+SEMI-MINOR-AXIS: {
+round(Astronomy.calc_semi_minor_axis(
+    self.selected_object[1].mass, self.selected_object[0].mass, polar_co_ords_vec2, self.selected_object[1].vel
+), 2):,}
 SOE: {Phys.calc_specific_orbital_energy(
 self.selected_object[1].mass, self.selected_object[0].mass, polar_co_ords_vec2, self.selected_object[1].vel                    
 ):,}
 Angular Momentum: {round(
-Phys.calc_angular_momentum(self.selected_object[1].mass, self.selected_object[1].pos, self.selected_object[1].vel).mag / 10 ** 12, 2):,}
-Radial Distance Vector: {
-polar_co_ords_vec2
-}
+round(Phys.calc_angular_momentum(self.selected_object[1].mass, self.selected_object[1].pos, self.selected_object[1].vel).mag / 10 ** 12, 2), 2):,}
 Ecc: {
 Astronomy.calc_eccentricity_vector(self.selected_object[0].mass, self.selected_object[1].mass, polar_co_ords_vec2, self.selected_object[1].vel):,}
-Vel (1): {
-self.selected_object[1].vel
-}
+Apseas: A: {round(apseas[0], 2)}, P: {round(apseas[1], 2)}
 """
 
+            orbs = self.selected_object[0].orbit
+            parent = self.selected_object[0].parent
+            parent_name = None
+            if parent is not None:
+                parent_name = parent.name
+            orbital_params = f"""\n
+Orbiting: {parent_name}
+Semi Major Axis: {round(orbs.semiMajorAxis, 2)}
+Semi Minor Axis: {round(orbs.semiMinorAxis, 2)}
+Ecc: {round(orbs.eccentricity, 5)}
+Apoapsis: {round(orbs.apoapsis, 2)}
+Periapsis: {round(orbs.periapsis, 2)}
+"""
 
             # Make mass readout in Kilo-Units, Round age?,
             individual_text = f"""
@@ -1091,7 +1266,7 @@ Mass: {self.selected_object[0].mass / 10 ** 12 :,} TU
 X, Y: {round(self.selected_object[0].center_x, 2)}, {round(self.selected_object[0].center_y, 2)}
 Age:  {round(self.selected_object[0].age, 2)}
 Velocity: {round(self.selected_object[0].vel.x, 1), round(self.selected_object[0].vel.y, 1)}
-Speed: {round(self.selected_object[0].vel.mag)}
+Speed: {round(self.selected_object[0].vel.mag)} {orbital_params if self.selected_object[0].parent is not None else ""}
 """
 
 
