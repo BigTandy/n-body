@@ -222,6 +222,9 @@ class Vec2:
     def __rdiv__(self, other: int | float) -> Vec2:
         return self.__truediv__(other)
 
+    def __rdivmod__(self, other: Scalar) -> Vec2:
+        return self.__truediv__(other)
+
     def __abs__(self):
         return math.sqrt(self.x ** 2 + self.y ** 2)
 
@@ -230,10 +233,11 @@ class Vec2:
 
     def __str__(self):
         return f"""
-Vector <{self._x}, {self._y}>
+Vector <{self._x}, {self._y}> {"P" if self._polar else ""}
 """
 
-
+    def __repr__(self):
+        return str(self)
 
 
 class MathUtil:
@@ -407,18 +411,31 @@ class Phys:
 
 
     @staticmethod
-    def calc_angular_momentum(m: Scalar, p: Vec2, v: Vec2) -> Vec2:
+    def calc_angular_momentum(m: Scalar, r: Vec2, v: Vec2) -> Vec2:
         """
 
         :param m: Mass of orbiting Body
-        :param p: Position Vector
+        :param r: Position Vector
         :param v: Velocity Vector
         :return:
         """
         # https://en.wikipedia.org/wiki/Angular_momentum#Examples
         # http://www.scholarpedia.org/article/Celestial_mechanics#Newton.E2.80.99s_Celestial_Mechanics
-        #return m * p * v
-        return m * (p.cross_faux2d(v))
+        # https://en.wikipedia.org/wiki/Specific_angular_momentum
+
+        #return m * (r.cross_faux2d(v))
+        return r.cross_faux2d(m * v)
+
+
+    @staticmethod
+    def calc_specific_angular_momentum(r: Vec2, v: Vec2) -> Vec2:
+        """
+
+        :param r: Position Vector
+        :param v: Velocity Vector
+        :return:
+        """
+        return r.cross_faux2d(v)
 
 
     @staticmethod
@@ -472,8 +489,41 @@ class Astronomy:
         )
 
 
+    @staticmethod
+    def calc_semi_major_axis(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2) -> Scalar:
+        # https://space.stackexchange.com/questions/57909/how-can-i-find-the-x-y-position-of-apogee-and-perigee-if-i-only-have-the-value
+        """
+
+        :param m1: Mass of object 1
+        :param m2: Mass of object 2
+        :param r:  Radial Distance Vector, using a relative polar vector
+        :param v:  Velocity Vector
+        :return:
+        """
+        return Phys.standard_grav_parameter(m1, m2) / 2 * Phys.calc_specific_orbital_energy(m1, m2, r, v)
 
 
+    @staticmethod
+    def calc_eccentricity_vector(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2, d2: bool = False) -> Vec2:
+        # https://space.stackexchange.com/questions/57909/how-can-i-find-the-x-y-position-of-apogee-and-perigee-if-i-only-have-the-value
+        # THANK YOU RANDOM INTERNET MATH STRANGERS, YOU ARE HEROS!!!
+        """"""
+        e = (
+            (v.mag / Phys.standard_grav_parameter(m1, m2) - (1 / r.mag)) * r - (r * v / Phys.standard_grav_parameter(m1, m2)) * v
+        )
+
+
+        e2 = (
+            (v.cross_faux2d(Phys.calc_specific_angular_momentum(r, v)) / Phys.standard_grav_parameter(m1, m2))
+            -
+            (r / r.mag)
+            )
+
+
+        if d2:
+            return e
+        else:
+            return e2
 
 
 
@@ -754,7 +804,7 @@ class Sim(arcade.Window):
 
 
         self.selected_object_readout = arcade.Text(
-            "", 0, 150, font_size=10, anchor_x="left", anchor_y="top", multiline=True, width=225
+            "", 0, 150, font_size=10, anchor_x="left", anchor_y="top", multiline=True, width=2250  # 255
         )
 
 
@@ -1000,6 +1050,10 @@ class Sim(arcade.Window):
                     self.selected_object[1].pos.y - self.selected_object[0].pos.y,
                 )
                 polar_co_ords_vec2 = Vec2(polar_co_ords[0], polar_co_ords[1], True)
+                diff_co_vec2 = Vec2(
+                    self.selected_object[1].pos.x - self.selected_object[0].pos.x,
+                    self.selected_object[1].pos.y - self.selected_object[0].pos.y
+                )
 
                 systemtext = f"""
 {' - '.join(map(lambda x: x.name, self.selected_object))} System:
@@ -1009,10 +1063,21 @@ Gravitational Potential Energy: {
                                                  arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])) / 10 ** 12 * self.obj_scale, 2):,} TJ
 Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_object[1].mass) / 10 ** 12:,} TU
 Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
+SEMI-MAJOR-AXIS: {Astronomy.calc_semi_major_axis(
+self.selected_object[1].mass, self.selected_object[0].mass, polar_co_ords_vec2, self.selected_object[1].vel
+):,}
+SOE: {Phys.calc_specific_orbital_energy(
+self.selected_object[1].mass, self.selected_object[0].mass, polar_co_ords_vec2, self.selected_object[1].vel                    
+):,}
 Angular Momentum: {round(
 Phys.calc_angular_momentum(self.selected_object[1].mass, self.selected_object[1].pos, self.selected_object[1].vel).mag / 10 ** 12, 2):,}
 Radial Distance Vector: {
 polar_co_ords_vec2
+}
+Ecc: {
+Astronomy.calc_eccentricity_vector(self.selected_object[0].mass, self.selected_object[1].mass, polar_co_ords_vec2, self.selected_object[1].vel).mag:,}
+Vel (1): {
+self.selected_object[1].vel
 }
 """
 
