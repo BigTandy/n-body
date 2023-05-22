@@ -242,6 +242,9 @@ Vector <{self._x}, {self._y}> {"P" if self._polar else ""}
 
 class MathUtil:
 
+    # Vector Cross product of 2d?
+    # Skoggy says (x1 * x2) + (y1 * y2)
+
     @staticmethod
     def cartesian_to_polar(x: Scalar, y: Scalar) -> tuple[Scalar, Scalar]:
         # https://www.varsitytutors.com/hotmath/hotmath_help/topics/polar-coordinates
@@ -492,6 +495,7 @@ class Astronomy:
     @staticmethod
     def calc_semi_major_axis(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2) -> Scalar:
         # https://space.stackexchange.com/questions/57909/how-can-i-find-the-x-y-position-of-apogee-and-perigee-if-i-only-have-the-value
+        # http://orbitsimulator.com/formulas/OrbitalElements.html
         """
 
         :param m1: Mass of object 1
@@ -500,31 +504,29 @@ class Astronomy:
         :param v:  Velocity Vector
         :return:
         """
-        return Phys.standard_grav_parameter(m1, m2) / 2 * Phys.calc_specific_orbital_energy(m1, m2, r, v)
+        #return Phys.standard_grav_parameter(m1, m2) / 2 * Phys.calc_specific_orbital_energy(m1, m2, r, v)
+
+        # Formula taken from line 579, of OrbitalElements.html,
+        # http://orbitsimulator.com/formulas/OrbitalElements.html ^
+        return 1 / (2 / r.mag - v.mag **2 / Phys.standard_grav_parameter(m1, m2))
 
 
     @staticmethod
-    def calc_eccentricity_vector(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2, d2: bool = False) -> Vec2:
+    def calc_eccentricity_vector(m1: Scalar, m2: Scalar, r: Vec2, v: Vec2, d2: bool = False) -> Scalar:
         # https://space.stackexchange.com/questions/57909/how-can-i-find-the-x-y-position-of-apogee-and-perigee-if-i-only-have-the-value
         # THANK YOU RANDOM INTERNET MATH STRANGERS, YOU ARE HEROS!!!
+
+        # Formula taken from line 589, of OrbitalElements.html,
+        # http://orbitsimulator.com/formulas/OrbitalElements.html ^
+        # Actual God-send, would not be possibe without
+        # Thank you, Tony Dunn
         """"""
-        e = (
-            (v.mag / Phys.standard_grav_parameter(m1, m2) - (1 / r.mag)) * r - (r * v / Phys.standard_grav_parameter(m1, m2)) * v
-        )
 
 
-        e2 = (
-            (v.cross_faux2d(Phys.calc_specific_angular_momentum(r, v)) / Phys.standard_grav_parameter(m1, m2))
-            -
-            (r / r.mag)
-            )
-
-
-        if d2:
-            return e
-        else:
-            return e2
-
+        e = math.sqrt(1 - (
+            r.cross_faux3d(v) ** 2 / Phys.standard_grav_parameter(m1, m2)
+        ) / Astronomy.calc_semi_major_axis(m1, m2, r, v))
+        return e
 
 
 
@@ -1075,7 +1077,7 @@ Radial Distance Vector: {
 polar_co_ords_vec2
 }
 Ecc: {
-Astronomy.calc_eccentricity_vector(self.selected_object[0].mass, self.selected_object[1].mass, polar_co_ords_vec2, self.selected_object[1].vel).mag:,}
+Astronomy.calc_eccentricity_vector(self.selected_object[0].mass, self.selected_object[1].mass, polar_co_ords_vec2, self.selected_object[1].vel):,}
 Vel (1): {
 self.selected_object[1].vel
 }
