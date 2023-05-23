@@ -254,8 +254,16 @@ class MathUtil:
         :param y: Y
         :return: (R, θ)
         """
+
+        if y == 0:
+            y += 0.0001
+
         r = math.sqrt(x ** 2 + y ** 2)
-        theta = math.degrees(math.atan(y / x))
+        if x != 0:
+            theta = math.degrees(math.atan(y / x))  # FIXME # https://math.stackexchange.com/questions/3802817/converting-cartesian-to-polar-coordinates
+        else:
+            # https://socratic.org/questions/how-do-you-convert-0-2-from-cartesian-to-polar-coordinates
+            theta = math.pi / y
         return r, theta
 
 
@@ -816,12 +824,16 @@ class Entity(arcade.Sprite):
             self.orbit.periapsis = apseas[1]
 
             self.orbit.semiMajorAxis = Astronomy.calc_semi_major_axis(obj.mass, self.mass, r, self.vel)
-            self.orbit.semiMinorAxis = Astronomy.calc_semi_minor_axis(obj.mass, self.mass, r, self.vel)
             self.orbit.eccentricity = Astronomy.calc_eccentricity_vector(obj.mass, self.mass, r, self.vel)
 
 
 
-            if (self.orbit.semiMajorAxis > 0) and (self.orbit.eccentricity <= .85):
+            if (self.orbit.semiMajorAxis > 0) and (self.orbit.eccentricity <= .85) and not (self.mass * .90 < obj.mass < self.mass * 1.10):
+                # FIXME We get a Recursion Depth Error, due to multiple same mass bodys thinking their orbiting eachother,
+                #  Need Additional check to see if we are going required speed
+                #  -----> For Now we are just going to "forbid" objects of simular mass from "orbiting" eachother
+                #                 We will Simply just not recogize such orbits
+
                 # We are orbiting
                 self.parent = obj
 
@@ -830,6 +842,9 @@ class Entity(arcade.Sprite):
 
                 self.info_text.text = self.name  # Probably want to optimize this sometime,
                 # so we aren't always setting this, but that could be said about alot about everything to do with this
+
+                # Putting Potentially Dangerous equations down here (i.e. Could crash if values are wrong)
+                self.orbit.semiMinorAxis = Astronomy.calc_semi_minor_axis(obj.mass, self.mass, r, self.vel)
 
                 break
         else:
