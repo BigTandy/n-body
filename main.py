@@ -619,6 +619,21 @@ class Astronomy:
 
 
 
+    @staticmethod
+    def calc_hill_sphere(m1: Scalar, m2: Scalar, a: Scalar, e: Scalar) -> Scalar:
+        #
+        """
+
+        :param m1: Mass 1
+        :param m2: Mass 2
+        :param a:  Semi-Major Axis
+        :param e:  Eccentricity
+        :return:
+        """
+
+        return a * (1 - e) * ((m1 / 3 * m2) ** (1 / 3))
+
+
 
 class Orbit:
 
@@ -833,6 +848,7 @@ class Entity(arcade.Sprite):
                 #  Need Additional check to see if we are going required speed
                 #  -----> For Now we are just going to "forbid" objects of simular mass from "orbiting" eachother
                 #                 We will Simply just not recogize such orbits
+                #  Check if Total Energy is Negative
 
                 # We are orbiting
                 self.parent = obj
@@ -852,6 +868,7 @@ class Entity(arcade.Sprite):
                 self.parent.children.remove(self)
             self.parent = None
             self.orbit.clear()
+            self.info_text.text = self.name
 
 
 
@@ -1061,6 +1078,13 @@ class Sim(arcade.Window):
 
                 # if obj.parent is not None:
                 #
+                #     hill = Astronomy.calc_hill_sphere(obj.mass, obj.parent.mass, obj.orbit.semiMajorAxis, obj.orbit.eccentricity)
+                #     arcade.draw_circle_outline(
+                #
+                #     )
+
+                # if obj.parent is not None:
+                #
                 #
                 #     # arcade.draw_circle_filled(
                 #     #     obj.orbit.apoapsis
@@ -1218,7 +1242,7 @@ class Sim(arcade.Window):
                 needed_transverse_speed = round(Phys.calc_orbit_speed_circular(self.selected_object[0].mass, self.selected_object[1].mass,
                           arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])), 2)
 
-                orbiting = (needed_transverse_speed * .9 <= round(self.selected_object[1].vel.mag) <= needed_transverse_speed * 1.1)
+
                 # https://physics.stackexchange.com/a/546233
                 # TODO
                 #  CLEAN UP THIS CODE,
@@ -1243,21 +1267,8 @@ Gravitational Potential Energy: {
                                                  arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1])) / 10 ** 12 * self.obj_scale, 2):,} TJ
 Reduced Mass: {Phys.reduced_mass(self.selected_object[0].mass, self.selected_object[1].mass) / 10 ** 12:,} TU
 Distance: {round(arcade.get_distance_between_sprites(self.selected_object[0], self.selected_object[1]), 2):,}
-SEMI-MAJOR-AXIS: {round(Astronomy.calc_semi_major_axis(
-self.selected_object[1].mass, self.selected_object[0].mass, polar_co_ords_vec2, self.selected_object[1].vel
-), 2):,}
-SEMI-MINOR-AXIS: {
-round(Astronomy.calc_semi_minor_axis(
-    self.selected_object[1].mass, self.selected_object[0].mass, polar_co_ords_vec2, self.selected_object[1].vel
-), 2):,}
-SOE: {Phys.calc_specific_orbital_energy(
-self.selected_object[1].mass, self.selected_object[0].mass, polar_co_ords_vec2, self.selected_object[1].vel                    
-):,}
 Angular Momentum: {round(
 round(Phys.calc_angular_momentum(self.selected_object[1].mass, self.selected_object[1].pos, self.selected_object[1].vel).mag / 10 ** 12, 2), 2):,}
-Ecc: {
-Astronomy.calc_eccentricity_vector(self.selected_object[0].mass, self.selected_object[1].mass, polar_co_ords_vec2, self.selected_object[1].vel):,}
-Apseas: A: {round(apseas[0], 2)}, P: {round(apseas[1], 2)}
 """
 
             orbs = self.selected_object[0].orbit
@@ -1282,6 +1293,7 @@ X, Y: {round(self.selected_object[0].center_x, 2)}, {round(self.selected_object[
 Age:  {round(self.selected_object[0].age, 2)}
 Velocity: {round(self.selected_object[0].vel.x, 1), round(self.selected_object[0].vel.y, 1)}
 Speed: {round(self.selected_object[0].vel.mag)} {orbital_params if self.selected_object[0].parent is not None else ""}
+{f"Children: {len(self.selected_object[0].children)}" if len(self.selected_object[0].children) > 0 else ""}
 """
 
 
